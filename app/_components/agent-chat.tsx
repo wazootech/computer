@@ -24,7 +24,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { AgentMessage } from "./agent-message";
 
-const AGENT_NAME = "computer";
+const AGENT_NAME = "Computer";
 
 export function AgentChat({
   sessionId,
