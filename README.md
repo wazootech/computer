@@ -1,5 +1,16 @@
 # Computer
 
+<p align="center">
+  <a href="https://docs.wazoo.dev">
+    <img src="https://wazoo.dev/assets/wazoo.svg" alt="Wazoo Worlds" width="120" />
+  </a>
+  <br /><br />
+  <em>Wazoo's operating computer for turning direction into shipped work.</em>
+  <br /><br />
+  <a href="https://github.com/wazootech/computer"><img src="https://img.shields.io/badge/GitHub-black?logo=github" alt="GitHub" /></a>
+  <a href="https://docs.wazoo.dev"><img src="https://img.shields.io/badge/Docs-wazoo.dev-blue" alt="Documentation" /></a>
+</p>
+
 Computer is Wazoo's operational AI partner, inspired by the Enterprise computer from *Star Trek: The Next Generation*. It is bootstrapped with [eve](https://eve.dev) and provides an authenticated web chat today. Its voice and operating guidance live in `agent/instructions.md`.
 
 ## Current access

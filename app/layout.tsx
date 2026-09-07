@@ -21,7 +21,7 @@ const mono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Computer — Wazoo Operating Partner",
-  description: "Computer is Wazoo's TNG-inspired operating partner for turning direction into shipped work.",
+  description: "Computer is Wazoo's operating partner for turning direction into shipped work.",
 };
 
 // The page and Eve routes validate the generated app's Better Auth session.
