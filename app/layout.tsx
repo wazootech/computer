@@ -20,8 +20,8 @@ const mono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "computer",
-  description: "A Next.js starter for eve agents with AI Elements.",
+  title: "Computer — Wazoo Operating Partner",
+  description: "Computer is Wazoo's operating partner for turning direction into shipped work.",
 };
 
 // The page and Eve routes validate the generated app's Better Auth session.
