@@ -13,6 +13,7 @@
     "eval": "eve eval",
     "start": "next start",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test lib/*.test.ts",
     "build:eve": "eve build",
     "dev:eve": "eve dev",
     "start:eve": "eve start"

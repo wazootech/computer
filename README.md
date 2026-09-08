@@ -35,6 +35,10 @@ eve deploy
 
 Production access uses the Vercel sign-in flow already included in the scaffold. The deployment must provide `BETTER_AUTH_SECRET`, `VERCEL_APP_CLIENT_ID`, and `VERCEL_APP_CLIENT_SECRET`; the auth configuration also trusts the Vercel deployment host variables.
 
+## Runtime preflight
+
+Computer exposes a host-side `preflight` tool that verifies the GitHub App installation token has exactly `members: read`, can read the configured approver team, and can reach DeepSeek with `deepseek-v4-flash`. It reports only statuses, counts, and HTTP codes; it never returns tokens or secret values. The deployment must provide `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY`, `FACTORY_APPROVAL_SECRET`, and `DEEPSEEK_API_KEY`.
+
 Discord is not connected yet. The intended next channel is a team-facing bot that uses the same Computer identity and runtime while preserving authentication, approval, and action boundaries.
 
 ## Development
