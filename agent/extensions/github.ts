@@ -9,7 +9,8 @@ import {
   updateIssuePolicy,
   writePolicy,
 } from "../lib/github/approval.js";
-import { mintInstallationToken } from "../../lib/preflight.js";
+import { mintInstallationToken } from "../lib/github/app-token.js";
+import { teamApprovalResponse } from "../lib/github/team-approval.js";
 
 /**
  * GitHub tool surface for the orchestrator, mounted as an eve extension.
@@ -81,6 +82,6 @@ export default githubExtension({
     removeLabel: labelPolicy,
     requestReviewers: writePolicy,
     updateIssue: updateIssuePolicy,
-    updatePullRequest: shipPolicy,
+    updatePullRequest: { request: shipPolicy, response: teamApprovalResponse },
   },
 });

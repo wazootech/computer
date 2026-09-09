@@ -38,6 +38,14 @@ const isIgnoredComment = (comment: GitHubComment, botName: string): boolean => {
   );
 };
 
+const trustedGitHubAuth = (ctx: GitHubInboundContext) => {
+  const auth = stampTrusted(defaultGitHubAuth(ctx));
+  return {
+    ...auth,
+    attributes: { ...auth.attributes, githubLogin: ctx.sender.login },
+  };
+};
+
 const isTrustedCommenter = (comment: GitHubComment): boolean => {
   const association = comment.raw.author_association;
   return (
@@ -138,7 +146,7 @@ const PR_SUMMARY_TASK = [
 
 /**
  * GitHub channel: the factory's main intake and delivery surface, as
- * "Foreman".
+ * "Computer".
  *
  * @remarks
  * - Credentials are brokered by Vercel Connect through the shared handle in
@@ -176,7 +184,7 @@ const PR_SUMMARY_TASK = [
  *   that one issue, closing or reopening issues, and draft pull requests.
  * - `onPullRequest` dispatches only on the `opened` action and skips PRs
  *   opened by bots, which covers Dependabot and the factory's own
- *   `foreman[bot]` pull requests. It is deliberately not gated by
+ *   `computer[bot]` pull requests. It is deliberately not gated by
  *   `author_association`: summarizing outside contributors' PRs is the point,
  *   and the injected task is scoped to posting a single summary comment.
  * - `onCheckSuite` is the red-CI fix loop, scoped to the factory's own work:
@@ -229,7 +237,7 @@ export default githubChannel({
     return !isIgnoredComment(comment, botName) &&
       mentionPattern(botName).test(comment.body) &&
       isTrustedCommenter(comment)
-      ? { auth: stampTrusted(defaultGitHubAuth(ctx)) }
+      ? { auth: trustedGitHubAuth(ctx) }
       : null;
   },
   onIssue: async (ctx, issue) => {

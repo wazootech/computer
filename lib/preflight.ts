@@ -241,3 +241,7 @@ export function summarizeSecrets(
 ): SecretStatus {
   return requiredSecrets(env, includeDeepSeek);
 }
+
+export async function mintInstallationToken(): Promise<string> {
+  return (await readInstallationToken(process.env, fetch)).token;
+}
