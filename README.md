@@ -22,7 +22,9 @@ Each station has its own instructions, sandbox, tools, and structured output. Th
 
 ## Memory and run records
 
-Computer-specific memory lives in the private [computer-memory](https://github.com/wazootech/computer-memory) repository. Curated factory notes and redacted run records are Markdown wiki entities there, not Vercel Blob. Run records are written through a branch and draft PR and may contain stage events, approvals, outputs, token usage, and failures. They must never contain credentials, access tokens, private keys, or raw customer data.
+Computer-specific curated memory, handoff artifacts, preferences, and redacted run records live in Vercel Blob, using reserved namespaces owned by dedicated tools. Run records contain stage events, approvals, outputs, token usage, and failures. They must never contain credentials, access tokens, private keys, or raw customer data.
+
+The separate [computer-memory](https://github.com/wazootech/computer-memory) repository is a follow-up integration point, tracked separately from the first Blob-backed factory implementation.
 
 User preferences and transient station handoff artifacts remain in their isolated storage namespaces. They are not the Computer factory brain.
 
@@ -46,9 +48,9 @@ Production deployment uses:
 eve deploy
 ```
 
-The production runtime needs `BETTER_AUTH_SECRET`, `VERCEL_APP_CLIENT_ID`, `VERCEL_APP_CLIENT_SECRET`, `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY`, `FACTORY_APPROVAL_SECRET`, and `DEEPSEEK_API_KEY`. `FACTORY_REPO` defaults to `wazootech/computer`; `COMPUTER_MEMORY_REPO` defaults to `wazootech/computer-memory`.
+The production runtime needs `BETTER_AUTH_SECRET`, `VERCEL_APP_CLIENT_ID`, `VERCEL_APP_CLIENT_SECRET`, `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET`, `FACTORY_APPROVAL_SECRET`, and `DEEPSEEK_API_KEY`. `FACTORY_REPO` defaults to `wazootech/computer`.
 
-The `preflight` tool checks the fresh GitHub App installation token, the `wazootech/team` membership endpoint, and the `deepseek-v4-flash` model without returning secret values. The GitHub App's organization Members permission must be read-only.
+The GitHub channel uses Eve's native GitHub App authentication with the WazooComputer App credentials. It does not require `GITHUB_CONNECTOR`. The GitHub webhook secret authenticates inbound events; the App private key and installation ID authorize GitHub API calls and sandbox egress.
 
 Discord is not connected yet. The planned Discord bot will use the same Computer identity and pipeline with channel- and role-aware authorization.
 

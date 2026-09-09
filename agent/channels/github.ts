@@ -6,8 +6,14 @@ import {
 } from "eve/channels/github";
 import { FACTORY_BRANCH_PREFIX, FACTORY_LABEL } from "../lib/constants.js";
 import { mentionPattern, resolveBotName } from "../lib/github/bot-name.js";
-import { githubCredentials } from "../lib/github/credentials.js";
 import { stampAutonomous, stampTrusted } from "../lib/trust.js";
+
+const githubCredentials = {
+  appId: () => process.env.GITHUB_APP_ID ?? "",
+  appSlug: () => process.env.GITHUB_APP_SLUG ?? "wazoocomputer",
+  privateKey: () => process.env.GITHUB_APP_PRIVATE_KEY ?? "",
+  webhookSecret: () => process.env.GITHUB_WEBHOOK_SECRET ?? "",
+};
 
 /**
  * Commenter roles allowed to start a session by mentioning the agent.
@@ -149,9 +155,8 @@ const PR_SUMMARY_TASK = [
  * "Computer".
  *
  * @remarks
- * - Credentials are brokered by Vercel Connect through the shared handle in
- *   `agent/lib/github/credentials.ts`; tokens are resolved per call and never
- *   exposed to the model.
+ * - Credentials are Eve's native GitHub App credentials from environment variables;
+ *   tokens are resolved per request and never exposed to the model.
  * - The name the factory answers to is resolved from the GitHub App's own
  *   slug (`agent/lib/github/bot-name.ts`), so the mention follows whatever
  *   the deployer named their app with no configuration, and a hardcoded
@@ -193,8 +198,7 @@ const PR_SUMMARY_TASK = [
  *   red PR never triggers an uninvited fix. The session runs unattended under
  *   the autonomous principal, anchored to the pull request, and the injected
  *   task bounds the loop by counting earlier fix-attempt comments on the
- *   thread. Requires the connector to subscribe to the `check_suite` webhook
- *   event.
+ *   thread. Requires the GitHub App webhook to subscribe to the `check_suite` event.
  * - Human-in-the-loop prompts are the channel's own (eve ≥ 0.34 posts them by
  *   default): when a session stops for approval or input, the channel renders
  *   the request as a comment with a mention-based reply instruction. Passing

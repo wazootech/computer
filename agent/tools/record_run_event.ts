@@ -1,6 +1,6 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
-import { appendRunEvent } from "#lib/memory/client.js";
+import { appendRunEvent } from "#lib/run-records.js";
 
 const usage = z.object({
   inputTokens: z.number().int().nonnegative().optional(),
@@ -10,7 +10,7 @@ const usage = z.object({
 });
 
 export default defineTool({
-  description: "Append one redacted software-factory stage, approval, output, or failure event to an existing Computer run record. Summaries and outputs must be concise and must not contain credentials or raw customer data.",
+  description: "Append one redacted software-factory stage, approval, output, or failure event to an existing Computer run record in Vercel Blob. Summaries and outputs must be concise and must not contain credentials or raw customer data.",
   inputSchema: z.object({
     failure: z.unknown().optional(),
     kind: z.enum(["stage", "approval", "output", "failure"]),
@@ -21,7 +21,7 @@ export default defineTool({
     summary: z.string().min(1).max(4000),
     usage: usage.optional(),
   }),
-  outputSchema: z.object({ branch: z.string(), path: z.string() }),
+  outputSchema: z.object({ path: z.string() }),
   async execute(input) {
     return appendRunEvent(input.runId, input);
   },

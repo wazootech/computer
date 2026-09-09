@@ -1,5 +1,3 @@
-import { connect } from "@vercel/connect/eve";
-
 export function requireEnv(name: string, example: string): string {
   const value = process.env[name];
   if (!value) {
@@ -19,11 +17,3 @@ const [factoryOwner = "", factoryRepoName = ""] = FACTORY_REPO.split("/");
 export const factoryRepo = { owner: factoryOwner, repo: factoryRepoName };
 export const FACTORY_LABEL = process.env.FACTORY_LABEL ?? "factory";
 export const FACTORY_BRANCH_PREFIX = process.env.FACTORY_BRANCH_PREFIX ?? "factory/";
-
-export const linearAuth = connect({
-  connector: process.env.LINEAR_CONNECTOR ?? "linear/computer",
-  principalType: "app",
-  tokenParams: {
-    scopes: ["read", "write", "issues:create", "comments:create"],
-  },
-});

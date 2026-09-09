@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^3.0.45",
-    "@github-tools/eve-extension": "^0.7.0",
+    "@github-tools/sdk": "1.16.0",
     "@radix-ui/react-use-controllable-state": "1.2.2",
     "@shikijs/core": "3.23.0",
     "@shikijs/engine-javascript": "3.23.0",
@@ -31,13 +31,12 @@
     "@streamdown/mermaid": "1.0.2",
     "@tailwindcss/postcss": "4.3.0",
     "@vercel/blob": "^2.8.0",
-    "@vercel/connect": "0.4.2",
     "ai": "7.0.84",
     "better-auth": "1.6.26",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "cmdk": "1.1.1",
-    "eve": "0.47.3",
+    "eve": "0.52.3",
     "lucide-react": "1.16.0",
     "motion": "12.40.0",
     "nanoid": "5.1.11",
@@ -60,5 +59,11 @@
   },
   "engines": {
     "node": "24.x"
+  },
+  "pnpm": {
+    "overrides": {
+      "@github-tools/eve-extension>eve": "0.52.3",
+      "@github-tools/sdk>eve": "0.52.3"
+    }
   }
 }

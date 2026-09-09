@@ -26,7 +26,7 @@ The result is a draft pull request. Merge and ready-for-review actions are inten
 
 ## Memory boundary
 
-Computer-specific durable memory is stored in the private `wazootech/computer-memory` repository. The `read_factory_brain` and `update_factory_brain` tools use Markdown wiki entities there. The `start_run` and `record_run_event` tools write redacted execution evidence to a run-specific branch and draft PR.
+Computer-specific curated memory and redacted run records use Vercel Blob for the first factory implementation. Reserved namespaces prevent generic file tools from reading or overwriting factory brain and run records. A follow-up issue tracks optional synchronization to the private `wazootech/computer-memory` repository; that integration is not part of this factory adoption.
 
 Each run record may include:
 
@@ -48,6 +48,6 @@ The writer recursively redacts credential-shaped keys and values. It never store
 
 ## Configuration
 
-`FACTORY_REPO` selects the target repository and defaults to `wazootech/computer`. `COMPUTER_MEMORY_REPO` selects the memory repository and defaults to `wazootech/computer-memory`. `DEEPSEEK_MODEL` defaults to `deepseek-v4-flash`.
+`FACTORY_REPO` selects the target repository and defaults to `wazootech/computer`. `DEEPSEEK_MODEL` defaults to `deepseek-v4-flash`.
 
-The web surface uses Vercel authentication. GitHub channels require their Eve webhook connector when enabled. Linear is optional and is not required for the GitHub factory path.
+The web surface uses Vercel authentication. The GitHub channel uses Eve’s native GitHub App credentials and webhook verification; no Vercel Connect GitHub connector is required. Linear is optional and is not required for the GitHub factory path.

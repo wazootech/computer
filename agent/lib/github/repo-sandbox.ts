@@ -128,13 +128,13 @@ export async function factoryBootstrap({
 const SAFE_BOT_NAME = /^[A-Za-z0-9._-]+$/;
 
 /**
- * The bot's commit identity, from the connector-resolved name.
+ * The bot's commit identity, from the App-resolved name.
  *
  * @remarks
  * Falls back to the static default when resolution fails (a commit identity
- * is needed even when the connector metadata is briefly unreachable) or when
+ * is needed even when App metadata is briefly unreachable) or when
  * the resolved name carries characters that don't belong in a shell-quoted
- * git config value; connector app slugs never do, but the name can also
+ * git config value; App slugs never do, but the name can also
  * arrive from an env override.
  */
 async function gitIdentity(): Promise<{ email: string; name: string }> {

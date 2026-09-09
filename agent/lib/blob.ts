@@ -31,6 +31,8 @@ export const FACTORY_BRAIN_PREFIX = "factory-brain/";
 /** Blob path prefix holding handoff artifacts passed between stations. */
 export const ARTIFACTS_PREFIX = "artifacts/";
 
+export const RUN_RECORDS_PREFIX = "run-records/";
+
 /**
  * A Blob path prefix that a general-purpose Blob tool must not touch.
  *
@@ -69,6 +71,11 @@ const RESERVED_NAMESPACES: Readonly<Record<string, ReservedNamespace>> = {
     label: "user preferences",
     readTool: "get_user_preferences",
     writeTool: "save_user_preferences",
+  },
+  [RUN_RECORDS_PREFIX]: {
+    label: "redacted run records",
+    readTool: "read_run_record",
+    writeTool: "record_run_event",
   },
 };
 
