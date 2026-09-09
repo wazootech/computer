@@ -1,12 +1,10 @@
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { defineAgent } from "eve";
-
-const deepseek = createOpenAICompatible({
-  apiKey: process.env.DEEPSEEK_API_KEY,
-  baseURL: "https://api.deepseek.com",
-  name: "deepseek",
-});
+import { MODELS } from "./lib/models.js";
 
 export default defineAgent({
-  model: deepseek("deepseek-v4-flash"),
+  compaction: { thresholdPercent: 0.75 },
+  limits: {
+    maxOutputTokensPerSession: 100_000,
+  },
+  model: MODELS.orchestrator,
 });

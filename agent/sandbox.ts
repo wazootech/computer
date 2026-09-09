@@ -1,27 +1,37 @@
-import { defineSandbox } from "eve/sandbox";
+import { defineSandbox, type SandboxSessionContext } from "eve/sandbox";
 import { vercel } from "eve/sandbox/vercel";
-import { FACTORY_NETWORK_POLICY } from "../lib/sandbox-policy";
+import { FACTORY_SANDBOX_CREATE_OPTIONS } from "./lib/github/repo-sandbox.js";
 
 /**
- * Computer's sandbox: the Vercel backend pinned unconditionally so local
- * development exercises the same hosted backend as production (the
- * wazoo-factory choice, carried through computer#10).
+ * Root agent sandbox configuration.
  *
- * Network policy is default-deny with only the npm registry allow-listed.
- * github.com is deliberately unreachable from the sandbox: the publish
- * seam (computer#7) is host-side, so no credential ever needs to enter
- * the sandbox and denying the domain proves the isolation rule.
+ * @remarks
+ * Pins the hosted Vercel Sandbox backend for both local development and production, so the
+ * same environment runs everywhere. Running locally requires the project to be linked and
+ * authenticated to Vercel.
  *
- * The session timeout bounds one factory phase chain; durable state
- * carries the run across step boundaries regardless (SandboxState).
+ * The `onSession` hook marks `/workspace` as a safe git directory before the GitHub channel's
+ * built-in per-turn checkout runs there. The sandbox filesystem is owned by the builder uid,
+ * not the session user, so without this git aborts every command with "detected dubious
+ * ownership in repository at '/workspace'", the channel swallows the failed checkout, and the
+ * turn runs with no working tree. The station sandboxes handle the same hazard for
+ * `/workspace/repo` in `agent/lib/github/repo-sandbox.ts`.
+ *
+ * @see {@link https://vercel.com/docs/sandbox | Vercel Sandbox}
  */
 export default defineSandbox({
-  backend: vercel(),
-  async onSession({ use }) {
-    await use({
-      networkPolicy: FACTORY_NETWORK_POLICY,
-      resources: { vcpus: 4 },
-      timeout: 3_600_000,
+  backend: vercel(FACTORY_SANDBOX_CREATE_OPTIONS),
+  async onSession({ use }: SandboxSessionContext): Promise<void> {
+    const sandbox = await use();
+    const result = await sandbox.run({
+      command: "git config --global --add safe.directory /workspace",
     });
+    if (result.exitCode !== 0) {
+      throw new Error(
+        `Failed to mark /workspace as a safe git directory (exit ${result.exitCode}): ${String(
+          result.stderr || result.stdout
+        ).trim()}`
+      );
+    }
   },
 });
