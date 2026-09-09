@@ -6,45 +6,61 @@
   </a>
   <br /><br />
   <em>Wazoo's operating computer for turning direction into shipped work.</em>
-  <br /><br />
-  <a href="https://github.com/wazootech/computer"><img src="https://img.shields.io/badge/GitHub-black?logo=github" alt="GitHub" /></a>
-  <a href="https://docs.wazoo.dev"><img src="https://img.shields.io/badge/Docs-wazoo.dev-blue" alt="Documentation" /></a>
 </p>
 
-Computer is Wazoo's operational AI partner, inspired by the Enterprise computer from *Star Trek: The Next Generation*. It is bootstrapped with [eve](https://eve.dev) and provides an authenticated web chat today. Its voice and operating guidance live in `agent/instructions.md`.
+Computer is Wazoo's operational AI partner, modeled after the Enterprise computer from *Star Trek: The Next Generation*. It runs on [eve](https://eve.dev), speaks through an authenticated web chat, and routes software work through a supervised factory pipeline.
 
-## Current access
+## Factory pipeline
 
-The current access surface is the generated web chat at `/`. In development, run:
+Computer follows the official Eve software-factory shape:
+
+```text
+work item → classifier → researcher (when needed) → analyst → implementer → reviewer → draft PR
+```
+
+Each station has its own instructions, sandbox, tools, and structured output. The reviewer is independent, revision loops are capped, and Computer never merges or marks a pull request ready without a person. GitHub intake supports authorized mentions, the `factory` label, and CI-failure follow-up. Linear remains an optional channel.
+
+## Memory and run records
+
+Computer-specific curated memory, handoff artifacts, preferences, and redacted run records live in Vercel Blob, using reserved namespaces owned by dedicated tools. Run records contain stage events, approvals, outputs, token usage, and failures. They must never contain credentials, access tokens, private keys, or raw customer data.
+
+The separate [computer-memory](https://github.com/wazootech/computer-memory) repository is a follow-up integration point, tracked separately from the first Blob-backed factory implementation.
+
+User preferences and transient station handoff artifacts remain in their isolated storage namespaces. They are not the Computer factory brain.
+
+## Access and configuration
+
+The authenticated web chat is served at `/`. In development:
 
 ```bash
 pnpm dev
 ```
 
-The eve development TUI is available separately with:
+The Eve runtime can also be exercised with:
 
 ```bash
 pnpm dev:eve
 ```
 
-For a production web presence, deploy from the project root:
+Production deployment uses:
 
 ```bash
 eve deploy
 ```
 
-Production access uses the Vercel sign-in flow already included in the scaffold. The deployment must provide `BETTER_AUTH_SECRET`, `VERCEL_APP_CLIENT_ID`, and `VERCEL_APP_CLIENT_SECRET`; the auth configuration also trusts the Vercel deployment host variables.
+The production runtime needs `BETTER_AUTH_SECRET`, `VERCEL_APP_CLIENT_ID`, `VERCEL_APP_CLIENT_SECRET`, `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET`, `FACTORY_APPROVAL_SECRET`, and `DEEPSEEK_API_KEY`. `FACTORY_REPO` defaults to `wazootech/computer`.
 
-## Runtime preflight
+The GitHub channel uses Eve's native GitHub App authentication with the WazooComputer App credentials. It does not require `GITHUB_CONNECTOR`. The GitHub webhook secret authenticates inbound events; the App private key and installation ID authorize GitHub API calls and sandbox egress.
 
-Computer exposes a host-side `preflight` tool that verifies the GitHub App installation token has exactly `members: read`, can read the configured approver team, and can reach DeepSeek with `deepseek-v4-flash`. It reports only statuses, counts, and HTTP codes; it never returns tokens or secret values. The deployment must provide `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY`, `FACTORY_APPROVAL_SECRET`, and `DEEPSEEK_API_KEY`.
+Discord is not connected yet. The planned Discord bot will use the same Computer identity and pipeline with channel- and role-aware authorization.
 
-Discord is not connected yet. The intended next channel is a team-facing bot that uses the same Computer identity and runtime while preserving authentication, approval, and action boundaries.
+## Validation
 
-## Development
+```bash
+pnpm typecheck
+pnpm test
+pnpm build
+pnpm build:eve
+```
 
-Edit `agent/instructions.md` to refine Computer's identity, purpose, tone, and response guidelines. Configure its model and runtime behavior in `agent/agent.ts`.
-
-Add capabilities under `agent/`, including tools, connections, channels, skills, subagents, and schedules. eve reloads your changes as you work.
-
-Learn more in the [eve documentation](https://eve.dev/docs), the [Build an Agent tutorial](https://eve.dev/docs/tutorial/first-agent), or the [eve repository](https://github.com/vercel/eve).
+The factory evals are under `evals/`. Full-pipeline evals can create branches and consume model tokens, so run them only against a disposable target repository.
