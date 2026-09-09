@@ -160,7 +160,7 @@ export const readDocument = async (
 ): Promise<
   { found: false } | { content: string; found: true; uploadedAt: string }
 > => {
-  const result = await get(key, { access: "public" });
+  const result = await get(key, { access: "private" });
   if (!result?.stream) {
     return { found: false };
   }
@@ -192,7 +192,7 @@ export const writeDocument = (
   options: { allowOverwrite: boolean }
 ) =>
   put(key, contents, {
-    access: "public",
+    access: "private",
     addRandomSuffix: false,
     allowOverwrite: options.allowOverwrite,
     contentType: "text/markdown",
