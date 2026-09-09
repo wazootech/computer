@@ -8,6 +8,7 @@ import {
   shipPolicy,
   updateIssuePolicy,
   writePolicy,
+  teamApproval,
 } from "../lib/github/approval.js";
 import { mintInstallationToken } from "../lib/github/app-token.js";
 import { teamApprovalResponse } from "../lib/github/team-approval.js";
@@ -71,17 +72,17 @@ export default githubExtension({
     "getCiFailureContext",
   ],
   requireApproval: {
-    addAssignees: writePolicy,
-    addIssueComment: commentPolicy,
-    addLabels: labelPolicy,
-    addPullRequestComment: writePolicy,
-    closeIssue: closeIssuePolicy,
-    createIssue: writePolicy,
-    createPullRequest: createPullRequestPolicy,
-    removeAssignees: writePolicy,
-    removeLabel: labelPolicy,
-    requestReviewers: writePolicy,
-    updateIssue: updateIssuePolicy,
-    updatePullRequest: { request: shipPolicy, response: teamApprovalResponse },
+    addAssignees: teamApproval(writePolicy),
+    addIssueComment: teamApproval(commentPolicy),
+    addLabels: teamApproval(labelPolicy),
+    addPullRequestComment: teamApproval(writePolicy),
+    closeIssue: teamApproval(closeIssuePolicy),
+    createIssue: teamApproval(writePolicy),
+    createPullRequest: teamApproval(createPullRequestPolicy),
+    removeAssignees: teamApproval(writePolicy),
+    removeLabel: teamApproval(labelPolicy),
+    requestReviewers: teamApproval(writePolicy),
+    updateIssue: teamApproval(updateIssuePolicy),
+    updatePullRequest: teamApproval(shipPolicy),
   },
 });

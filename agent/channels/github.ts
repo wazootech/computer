@@ -38,7 +38,7 @@ const isIgnoredComment = (comment: GitHubComment, botName: string): boolean => {
   );
 };
 
-const trustedGitHubAuth = (ctx: GitHubInboundContext) => {
+const stampGithubTrusted = (ctx: GitHubInboundContext) => {
   const auth = stampTrusted(defaultGitHubAuth(ctx));
   return {
     ...auth,
@@ -237,7 +237,7 @@ export default githubChannel({
     return !isIgnoredComment(comment, botName) &&
       mentionPattern(botName).test(comment.body) &&
       isTrustedCommenter(comment)
-      ? { auth: trustedGitHubAuth(ctx) }
+      ? { auth: stampGithubTrusted(ctx) }
       : null;
   },
   onIssue: async (ctx, issue) => {

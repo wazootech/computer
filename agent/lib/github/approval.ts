@@ -1,4 +1,5 @@
-import type { ApprovalContext, ApprovalStatus } from "eve/tools/approval";
+import type { Approval, ApprovalContext, ApprovalPolicy, ApprovalStatus } from "eve/tools/approval";
+import { teamApprovalResponse } from "./team-approval.js";
 import {
   intakeIssueNumber,
   isAutonomous,
@@ -172,4 +173,8 @@ export function updateIssuePolicy(ctx: ApprovalContext): ApprovalStatus {
     return closeIssuePolicy();
   }
   return writePolicy(ctx);
+}
+
+export function teamApproval(request: ApprovalPolicy): Approval {
+  return { request, response: teamApprovalResponse };
 }
