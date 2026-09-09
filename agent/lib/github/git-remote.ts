@@ -1,6 +1,6 @@
-import type { GitHubChannelCredentials } from "eve/channels/github";
 import type { SandboxNetworkPolicy } from "eve/sandbox";
 import { FACTORY_REPO } from "../constants.js";
+import { mintInstallationToken } from "./app-token.js";
 
 const PROTECTED_BRANCHES = new Set(["main", "master"]);
 
@@ -77,15 +77,4 @@ export function brokerPolicy(installationToken: string): SandboxNetworkPolicy {
   };
 }
 
-/**
- * Resolves the Connect-managed installation token, minting when it is lazy.
- */
-export async function mintInstallationToken(
-  credentials: GitHubChannelCredentials
-): Promise<string> {
-  const token = credentials.installationToken;
-  if (token === undefined) {
-    throw new Error("The GitHub connector exposes no installation token.");
-  }
-  return typeof token === "function" ? await token() : token;
-}
+export { mintInstallationToken };

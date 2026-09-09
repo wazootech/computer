@@ -12,10 +12,9 @@ import {
   sanitizeCommandOutput,
 } from "./bootstrap-diagnostics.js";
 import { FALLBACK_BOT_NAME, resolveBotName } from "./bot-name.js";
-import { githubCredentials } from "./credentials.js";
+import { mintInstallationToken } from "./app-token.js";
 import {
   brokerPolicy,
-  mintInstallationToken,
   REMOTE_URL,
 } from "./git-remote.js";
 
@@ -101,7 +100,7 @@ export async function factoryBootstrap({
 }: SandboxBootstrapContext): Promise<void> {
   const sandbox = await use();
   const token = await mintTokenOrExplain(() =>
-    mintInstallationToken(githubCredentials)
+    mintInstallationToken()
   );
   await sandbox.setNetworkPolicy(brokerPolicy(token));
   try {
@@ -172,7 +171,7 @@ export async function factoryOnSession({
     `git config --global --add safe.directory /workspace && git config --global --add safe.directory /workspace/repo && git config --global user.name "${identity.name}" && git config --global user.email "${identity.email}"`
   );
   const token = await mintTokenOrExplain(() =>
-    mintInstallationToken(githubCredentials)
+    mintInstallationToken()
   );
   await sandbox.setNetworkPolicy(brokerPolicy(token));
   try {

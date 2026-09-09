@@ -1,9 +1,8 @@
 import { defineTool } from "eve/tools";
+import { mintInstallationToken } from "../../../lib/github/app-token.js";
 import { z } from "zod";
-import { githubCredentials } from "../../../lib/github/credentials.js";
 import {
   brokerPolicy,
-  mintInstallationToken,
   REMOTE_URL,
   REPO_DIR,
   validateBranch,
@@ -30,7 +29,7 @@ export default defineTool({
       return { error: refusal, success: false as const };
     }
     const sandbox = await ctx.getSandbox();
-    const token = await mintInstallationToken(githubCredentials);
+    const token = await mintInstallationToken();
     await sandbox.setNetworkPolicy(brokerPolicy(token));
     try {
       const push = await sandbox.run({
