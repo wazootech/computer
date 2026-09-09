@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { redact } from "../agent/lib/memory/redaction.ts";
+import { redact } from "../agent/lib/redaction.ts";
 
 test("redacts credential-shaped object keys", () => {
   const value = redact({
