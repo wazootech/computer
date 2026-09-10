@@ -1,6 +1,7 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { startRunRecord } from "#lib/run-records.js";
+import { repositoryTargetFromAuth } from "#lib/github/repository-target.js";
 
 export default defineTool({
   description: "Start a Computer software-factory run by creating a redacted run record in the reserved Vercel Blob namespace. Never include credentials or raw customer content in the title or summary.",
@@ -10,7 +11,9 @@ export default defineTool({
     title: z.string().min(1).max(240),
   }),
   outputSchema: z.object({ path: z.string(), runId: z.string() }),
-  async execute(input) {
-    return startRunRecord(input);
+  async execute(input, ctx) {
+    const target = repositoryTargetFromAuth(ctx.session.auth);
+    if (!target) throw new Error("No verified GitHub repository is attached to this session.");
+    return startRunRecord(input, target);
   },
 });

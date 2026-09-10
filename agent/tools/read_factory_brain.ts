@@ -2,13 +2,14 @@ import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { readDocument } from "#lib/blob.js";
 import { factoryBrainKey } from "#lib/factory-brain.js";
+import { repositoryTargetFromAuth } from "#lib/github/repository-target.js";
 
 /**
  * Tool that loads the shared factory brain from Vercel Blob.
  *
  * @remarks
- * The Blob key is derived from `FACTORY_REPO`, never from model input, so every session on the
- * deployment reads the same shared document (see `factoryBrainKey`). Reading is unrestricted:
+ * The Blob key is derived from the verified repository identity in session auth, never from model input, so each repository reads its own
+ * shared document (see `factoryBrainKey`). Reading is unrestricted:
  * every run, unattended included, may load the brain for context. Returns `found: false` with an
  * empty `brain` when nothing has been recorded yet, which is a normal state, not an error.
  * Authorization resolves from the ambient Vercel OIDC credentials.
@@ -25,8 +26,10 @@ export default defineTool({
    * @param _input - No input.
    * @returns `found` plus the `brain` Markdown (empty when none), or an `error`.
    */
-  async execute() {
-    const key = factoryBrainKey();
+  async execute(_input, ctx) {
+    const target = repositoryTargetFromAuth(ctx.session.auth);
+    if (!target) return { brain: "", found: false, error: "No verified GitHub repository is attached to this session." };
+    const key = factoryBrainKey(target);
     try {
       const doc = await readDocument(key);
       if (!doc.found) {

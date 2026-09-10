@@ -3,7 +3,7 @@ import { calledInOrder, STATIONS } from "../helpers.js";
 
 export default defineEval({
   description:
-    "A small real work item runs the whole line: all four stations fire in order and the final report names the branch or draft pull request that was delivered. Opt-in: this pushes a real branch to FACTORY_REPO, so run it deliberately against a scratch repository (pnpm eval pipeline/full-pipeline).",
+    "A small real work item runs the whole line: all four stations fire in order and the final report names the branch or draft pull request that was delivered. Opt-in: this pushes a real branch to the event repository, so run it deliberately against a scratch repository (pnpm eval pipeline/full-pipeline).",
   tags: ["slow", "needs-connect", "pipeline"],
   async test(t) {
     await t.send(

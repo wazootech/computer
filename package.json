@@ -19,6 +19,7 @@
     "start:eve": "eve start"
   },
   "dependencies": {
+    "@ai-sdk/deepseek": "3.0.36",
     "@ai-sdk/openai-compatible": "^3.0.45",
     "@github-tools/sdk": "1.16.0",
     "@radix-ui/react-use-controllable-state": "1.2.2",

@@ -4,9 +4,18 @@ import {
   type GitHubInboundContext,
   githubChannel,
 } from "eve/channels/github";
-import { FACTORY_BRANCH_PREFIX, FACTORY_LABEL } from "../lib/constants.js";
+import {
+  COMPUTER_APPROVER_ORG,
+  COMPUTER_APPROVER_TEAM,
+  FACTORY_BRANCH_PREFIX,
+  FACTORY_LABEL,
+} from "../lib/constants.js";
 import { mentionPattern, resolveBotName } from "../lib/github/bot-name.js";
 import { stampAutonomous, stampTrusted } from "../lib/trust.js";
+import {
+  repositoryAttributes,
+  repositoryTargetFromInbound,
+} from "../lib/github/repository-target.js";
 
 const githubCredentials = {
   appId: () => process.env.GITHUB_APP_ID ?? "",
@@ -24,8 +33,6 @@ const githubCredentials = {
  * repo hasn't trusted with write access, so their mentions are acknowledged
  * without dispatching.
  */
-const TRUSTED_ASSOCIATIONS = new Set(["COLLABORATOR", "MEMBER", "OWNER"]);
-
 /**
  * Replicates the channel's built-in ignore rules: eve's own marker comments,
  * bot authors, and the agent's own `<bot>[bot]` login.
@@ -48,15 +55,24 @@ const stampGithubTrusted = (ctx: GitHubInboundContext) => {
   const auth = stampTrusted(defaultGitHubAuth(ctx));
   return {
     ...auth,
-    attributes: { ...auth.attributes, githubLogin: ctx.sender.login },
+    attributes: {
+      ...auth.attributes,
+      githubLogin: ctx.sender.login,
+      ...repositoryAttributes(repositoryTargetFromInbound(ctx)),
+    },
   };
 };
 
-const isTrustedCommenter = (comment: GitHubComment): boolean => {
-  const association = comment.raw.author_association;
-  return (
-    typeof association === "string" && TRUSTED_ASSOCIATIONS.has(association)
-  );
+const stampGithubAutonomous = (ctx: GitHubInboundContext, anchor: number) => {
+  const auth = stampAutonomous(defaultGitHubAuth(ctx), anchor);
+  return {
+    ...auth,
+    attributes: {
+      ...auth.attributes,
+      githubLogin: ctx.sender.login,
+      ...repositoryAttributes(repositoryTargetFromInbound(ctx)),
+    },
+  };
 };
 
 /**
@@ -80,6 +96,22 @@ const TRUSTED_LABELER_ROLES = new Set(["admin", "maintain", "write", "triage"]);
  * unattended pipeline maintainer-triggered. Fails closed: an API error
  * acknowledges the event without dispatching.
  */
+const isAllowedTeamMember = async (
+  ctx: GitHubInboundContext
+): Promise<boolean> => {
+  if (ctx.sender.type === "Bot") return false;
+  try {
+    const response = await ctx.github.request({
+      method: "GET",
+      path: `/orgs/${encodeURIComponent(COMPUTER_APPROVER_ORG)}/teams/${encodeURIComponent(COMPUTER_APPROVER_TEAM)}/memberships/${encodeURIComponent(ctx.sender.login)}`,
+    });
+    return response.ok &&
+      (response.body as { state?: unknown }).state === "active";
+  } catch {
+    return false;
+  }
+};
+
 const isTrustedLabeler = async (
   ctx: GitHubInboundContext
 ): Promise<boolean> => {
@@ -210,7 +242,7 @@ const PR_SUMMARY_TASK = [
 export default githubChannel({
   botName: resolveBotName,
   credentials: githubCredentials,
-  onCheckSuite: (ctx, suite) => {
+  onCheckSuite: async (ctx, suite) => {
     const raw = suite.raw as {
       head_branch?: unknown;
       check_suite?: { head_branch?: unknown };
@@ -220,6 +252,7 @@ export default githubChannel({
     if (
       suite.action !== "completed" ||
       suite.conclusion !== "failure" ||
+      !(await isAllowedTeamMember(ctx)) ||
       pullNumber === undefined ||
       typeof headBranch !== "string" ||
       !headBranch.startsWith(FACTORY_BRANCH_PREFIX)
@@ -227,7 +260,7 @@ export default githubChannel({
       return null;
     }
     return {
-      auth: stampAutonomous(defaultGitHubAuth(ctx), pullNumber),
+      auth: stampGithubAutonomous(ctx, pullNumber),
       context: [CI_FIX_TASK],
     };
   },
@@ -240,7 +273,7 @@ export default githubChannel({
     }
     return !isIgnoredComment(comment, botName) &&
       mentionPattern(botName).test(comment.body) &&
-      isTrustedCommenter(comment)
+      (await isAllowedTeamMember(ctx))
       ? { auth: stampGithubTrusted(ctx) }
       : null;
   },
@@ -254,18 +287,19 @@ export default githubChannel({
     if (
       issue.action !== "labeled" ||
       !hasFactoryLabel ||
-      ctx.sender.type === "Bot" ||
+      !(await isAllowedTeamMember(ctx)) ||
       !(await isTrustedLabeler(ctx))
     ) {
       return null;
     }
     return {
-      auth: stampAutonomous(defaultGitHubAuth(ctx), issue.issueNumber),
+      auth: stampGithubAutonomous(ctx, issue.issueNumber),
       context: [FACTORY_INTAKE_TASK],
     };
   },
-  onPullRequest: (ctx, pullRequest) =>
-    pullRequest.action === "opened" && ctx.sender.type !== "Bot"
-      ? { auth: defaultGitHubAuth(ctx), context: [PR_SUMMARY_TASK] }
+  onPullRequest: async (ctx, pullRequest) =>
+    pullRequest.action === "opened" &&
+    (await isAllowedTeamMember(ctx))
+      ? { auth: stampGithubTrusted(ctx), context: [PR_SUMMARY_TASK] }
       : null,
 });

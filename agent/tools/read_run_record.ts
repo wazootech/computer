@@ -2,13 +2,16 @@ import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { readDocument } from "#lib/blob.js";
 import { runRecordPath } from "#lib/run-records.js";
+import { repositoryTargetFromAuth } from "#lib/github/repository-target.js";
 
 export default defineTool({
   description: "Read a redacted Computer software-factory run record from Vercel Blob by run ID. Use this for status and handoff context; records contain no credentials.",
   inputSchema: z.object({ runId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u) }),
   outputSchema: z.object({ found: z.boolean(), path: z.string(), record: z.string(), error: z.string().optional() }),
-  async execute({ runId }) {
-    const path = runRecordPath(runId);
+  async execute({ runId }, ctx) {
+    const target = repositoryTargetFromAuth(ctx.session.auth);
+    if (!target) return { error: "No verified GitHub repository is attached to this session.", found: false, path: "", record: "" };
+    const path = runRecordPath(target, runId);
     try {
       const document = await readDocument(path);
       return document.found

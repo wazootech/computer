@@ -1,4 +1,7 @@
 import { ARTIFACTS_PREFIX } from "../blob.js";
+import { createHash } from "node:crypto";
+import type { RepositoryTarget } from "../github/repository-target.js";
+import { repositoryScopeKey } from "../github/repository-target.js";
 
 /**
  * Key layout, bounds, and id handling for handoff artifacts.
@@ -113,8 +116,9 @@ export const artifactId = (kind: string, title: string): string => {
  * keeps a model-supplied id inside the reserved namespace. Callers treat `null` as "not found"
  * rather than surfacing the distinction, so a probe learns nothing from the difference.
  *
+ * @param target - The verified repository identity.
  * @param id - Model-supplied artifact id.
  * @returns The Blob key, or `null` when the id is not a valid artifact id.
  */
-export const artifactKey = (id: string): string | null =>
-  ARTIFACT_ID_PATTERN.test(id) ? `${ARTIFACTS_PREFIX}${id}.md` : null;
+export const artifactKey = (target: RepositoryTarget, id: string): string | null =>
+  ARTIFACT_ID_PATTERN.test(id) ? `${ARTIFACTS_PREFIX}${repositoryScopeKey(target)}/${id}.md` : null;
