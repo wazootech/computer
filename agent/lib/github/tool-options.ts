@@ -1,6 +1,9 @@
 import { buildEveToolDefinition } from "@github-tools/sdk/eve-runtime";
 import { defineTool, type ToolDefinition } from "eve/tools";
-import type { RepositoryTarget } from "./repository-target.js";
+import {
+  repositoryScopedSearchQuery,
+  type RepositoryTarget,
+} from "./repository-target.js";
 import {
   closeIssuePolicy,
   commentPolicy,
@@ -42,15 +45,19 @@ export function bindGithubTool(toolName: string, target: RepositoryTarget): Tool
     inputSchema: inner.inputSchema,
     outputSchema: inner.outputSchema,
     async execute(input, ctx) {
-      return inner.execute(
-        {
-          ...(input as Record<string, unknown>),
-          owner: target.owner,
-          repo: target.name,
-          repositoryId: target.id,
-        },
-        ctx
-      );
+      const boundInput: Record<string, unknown> = {
+        ...(input as Record<string, unknown>),
+        owner: target.owner,
+        repo: target.name,
+        repositoryId: target.id,
+      };
+      if (
+        (toolName === "searchCode" || toolName === "searchIssues") &&
+        typeof boundInput.query === "string"
+      ) {
+        boundInput.query = repositoryScopedSearchQuery(boundInput.query, target);
+      }
+      return inner.execute(boundInput, ctx);
     },
   });
 }

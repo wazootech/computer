@@ -59,6 +59,14 @@ export function repositoryTargetFromAuth(auth: AuthLike): RepositoryTarget | nul
   return { fullName, id, name, owner };
 }
 
+export function repositoryScopedSearchQuery(
+  query: string,
+  target: RepositoryTarget
+): string {
+  const unscopedQuery = query.replace(/\brepo:\S+/gi, "").replace(/\s+/g, " ").trim();
+  return [`repo:${target.fullName}`, unscopedQuery].filter(Boolean).join(" ");
+}
+
 export function repositoryScopeKey(target: RepositoryTarget): string {
   return createHash("sha256").update(`${target.id}:${target.fullName}`).digest("hex").slice(0, 32);
 }

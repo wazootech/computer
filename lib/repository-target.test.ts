@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  repositoryScopedSearchQuery,
   repositoryScopeKey,
   repositoryTargetFromAuth,
   type RepositoryTarget,
@@ -32,5 +33,16 @@ test("repository scope includes the stable GitHub repository id", () => {
   assert.notEqual(
     repositoryScopeKey(target),
     repositoryScopeKey({ ...target, id: 43 })
+  );
+});
+
+test("repository-scopes global search queries and overrides model repo qualifiers", () => {
+  assert.equal(
+    repositoryScopedSearchQuery("bug repo:other/private is:open", target),
+    "repo:wazootech/example bug is:open"
+  );
+  assert.equal(
+    repositoryScopedSearchQuery("repo:other/private", target),
+    "repo:wazootech/example"
   );
 });
