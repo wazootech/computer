@@ -1,6 +1,7 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { appendRunEvent } from "#lib/run-records.js";
+import { repositoryTargetFromAuth } from "#lib/github/repository-target.js";
 
 const usage = z.object({
   inputTokens: z.number().int().nonnegative().optional(),
@@ -22,7 +23,9 @@ export default defineTool({
     usage: usage.optional(),
   }),
   outputSchema: z.object({ path: z.string() }),
-  async execute(input) {
-    return appendRunEvent(input.runId, input);
+  async execute(input, ctx) {
+    const target = repositoryTargetFromAuth(ctx.session.auth);
+    if (!target) throw new Error("No verified GitHub repository is attached to this session.");
+    return appendRunEvent(input.runId, input, target);
   },
 });

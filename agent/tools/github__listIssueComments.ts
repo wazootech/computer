@@ -1,4 +1,16 @@
-import { buildEveToolDefinition } from "@github-tools/sdk/eve-runtime";
-import { githubToolOptions } from "#lib/github/tool-options.js";
+import { defineDynamic } from "eve/tools";
+import { bindGithubTool } from "#lib/github/tool-options.js";
+import { repositoryTargetFromAuth } from "#lib/github/repository-target.js";
 
-export default buildEveToolDefinition("listIssueComments", githubToolOptions);
+export default defineDynamic({
+  events: {
+    "session.started": (_event, ctx) => {
+      const target = repositoryTargetFromAuth(ctx.session.auth);
+      return target ? bindGithubTool("listIssueComments", target) : null;
+    },
+    "turn.started": (_event, ctx) => {
+      const target = repositoryTargetFromAuth(ctx.session.auth);
+      return target ? bindGithubTool("listIssueComments", target) : null;
+    },
+  },
+});

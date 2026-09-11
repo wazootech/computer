@@ -48,6 +48,6 @@ The writer recursively redacts credential-shaped keys and values. It never store
 
 ## Configuration
 
-`FACTORY_REPO` selects the target repository and defaults to `wazootech/computer`. `DEEPSEEK_MODEL` defaults to `deepseek-v4-flash`.
+`DEEPSEEK_MODEL` defaults to `deepseek-v4-flash`. GitHub events provide the verified owner, repository name, and repository ID. The sender must be an active member of `COMPUTER_APPROVER_ORG` and `COMPUTER_APPROVER_TEAM`; the default organization is `wazootech` and the default team is `team`.
 
 The web surface uses Vercel authentication. The GitHub channel uses Eve’s native GitHub App credentials and webhook verification; no Vercel Connect GitHub connector is required. Linear is optional and is not required for the GitHub factory path.

@@ -6,12 +6,13 @@ import {
   MAX_FACTORY_BRAIN_LENGTH,
 } from "#lib/factory-brain.js";
 import { factoryBrainPolicy } from "#lib/github/approval.js";
+import { repositoryTargetFromAuth } from "#lib/github/repository-target.js";
 
 /**
  * Tool that writes the shared factory brain to Vercel Blob.
  *
  * @remarks
- * The Blob key is derived from `FACTORY_REPO`, never from model input, so a write updates the one
+ * The Blob key is derived from the verified repository identity in session auth, never from model input, so a write updates only that repository's
  * shared document every session reads (see `factoryBrainKey`). Writes are gated by
  * `factoryBrainPolicy`: unattended runs are denied (a labeled issue's body is untrusted and must
  * not poison shared context), trusted callers write without a card, and everyone else parks on
@@ -34,8 +35,10 @@ export default defineTool({
    * @param input - Validated tool input.
    * @returns `success: true` with the stored `pathname`, or `success: false` with an `error`.
    */
-  async execute({ brain }) {
-    const key = factoryBrainKey();
+  async execute({ brain }, ctx) {
+    const target = repositoryTargetFromAuth(ctx.session.auth);
+    if (!target) return { error: "No verified GitHub repository is attached to this session.", success: false };
+    const key = factoryBrainKey(target);
     try {
       const blob = await writeDocument(key, brain, { allowOverwrite: true });
       return { pathname: blob.pathname, success: true };

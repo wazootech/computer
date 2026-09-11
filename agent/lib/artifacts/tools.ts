@@ -8,6 +8,8 @@ import {
   MAX_ARTIFACT_LENGTH,
   MAX_ARTIFACT_TITLE_LENGTH,
 } from "./config.js";
+import type { RepositoryTarget } from "../github/repository-target.js";
+import { repositoryTargetFromAuth } from "../github/repository-target.js";
 
 /**
  * The handoff-artifact tools.
@@ -50,9 +52,11 @@ export const saveArtifactTool = () =>
      * @param input - Validated tool input.
      * @returns The `id` to hand along, or `saved: false` with an `error`.
      */
-    async execute({ kind, title, markdown }) {
+    async execute({ kind, title, markdown }, ctx) {
+      const target = repositoryTargetFromAuth(ctx.session.auth);
+      if (!target) return { error: "No verified GitHub repository is attached to this session.", saved: false };
       const id = artifactId(kind, title);
-      const key = artifactKey(id);
+      const key = artifactKey(target, id);
       if (!key) {
         return { error: "Could not build a valid artifact id.", saved: false };
       }
@@ -125,8 +129,10 @@ export const readArtifactTool = () =>
      * @param input - Validated tool input.
      * @returns `found: true` with the document, or `found: false`.
      */
-    async execute({ id }) {
-      const key = artifactKey(id);
+    async execute({ id }, ctx) {
+      const target = repositoryTargetFromAuth(ctx.session.auth);
+      if (!target) return { found: false };
+      const key = artifactKey(target, id);
       if (!key) {
         return { found: false };
       }
