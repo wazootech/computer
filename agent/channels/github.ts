@@ -10,7 +10,11 @@ import {
   FACTORY_BRANCH_PREFIX,
   FACTORY_LABEL,
 } from "../lib/constants.js";
-import { mentionPattern, resolveBotName } from "../lib/github/bot-name.js";
+import {
+  bodyMentionsBot,
+  mentionPattern,
+  resolveBotName,
+} from "../lib/github/bot-name.js";
 import { stampAutonomous, stampTrusted } from "../lib/trust.js";
 import {
   repositoryAttributes,
@@ -182,6 +186,8 @@ const PR_SUMMARY_TASK = [
   "Close with one line pointing reviewers at where to start. This comment is a summary, not a review: don't approve, request changes, or ask the author for anything.",
 ].join("\n\n");
 
+const BODY_MENTION_ACTIONS = new Set(["opened", "edited"]);
+
 /**
  * GitHub channel: the factory's main intake and delivery surface, as
  * "Computer".
@@ -206,9 +212,11 @@ const PR_SUMMARY_TASK = [
  *   reversible writes without a card. Mentions from anyone else are
  *   acknowledged without a session, so arbitrary accounts on a public repo
  *   cannot drive the agent's write tools.
- * - `onIssue` is the unattended intake: adding the factory label hands the
- *   issue to the pipeline. Only the `labeled` action dispatches, and the
- *   labeler's repository permission is verified against the API first,
+ * - `onIssue` handles both direct body mentions and unattended intake:
+ *   an authorized mention in a newly opened or edited issue dispatches a
+ *   trusted session, while adding the factory label hands the issue to the
+ *   unattended pipeline. The labeler's repository permission is verified
+ *   against the API first,
  *   because GitHub fires `labeled` even for labels attached at creation time
  *   and issue templates let unauthenticated reporters do exactly that; below
  *   triage, the event is acknowledged without a session. The factory label is
@@ -219,11 +227,9 @@ const PR_SUMMARY_TASK = [
  *   autonomous principal with the intake issue number stamped in, and the
  *   approval policies deny it everything except labels, progress comments on
  *   that one issue, closing or reopening issues, and draft pull requests.
- * - `onPullRequest` dispatches only on the `opened` action and skips PRs
- *   opened by bots, which covers Dependabot and the factory's own
- *   `computer[bot]` pull requests. It is deliberately not gated by
- *   `author_association`: summarizing outside contributors' PRs is the point,
- *   and the injected task is scoped to posting a single summary comment.
+ * - `onPullRequest` dispatches an authorized body mention on a newly opened
+ *   or edited PR as a trusted session. A PR opened by an authorized team
+ *   member without a mention still receives the one-comment summary task.
  * - `onCheckSuite` is the red-CI fix loop, scoped to the factory's own work:
  *   it dispatches only when a suite completes with a failure conclusion on a
  *   pull request whose head branch carries the factory prefix, so a person's
@@ -278,6 +284,17 @@ export default githubChannel({
       : null;
   },
   onIssue: async (ctx, issue) => {
+    const botName = await resolveBotName().catch(() => null);
+    const body = issue.raw as { body?: unknown };
+    if (
+      botName !== null &&
+      BODY_MENTION_ACTIONS.has(issue.action) &&
+      bodyMentionsBot(body.body, botName) &&
+      (await isAllowedTeamMember(ctx))
+    ) {
+      return { auth: stampGithubTrusted(ctx) };
+    }
+
     const { labels } = issue.raw as {
       labels?: ReadonlyArray<{ name?: unknown }>;
     };
@@ -297,9 +314,22 @@ export default githubChannel({
       context: [FACTORY_INTAKE_TASK],
     };
   },
-  onPullRequest: async (ctx, pullRequest) =>
-    pullRequest.action === "opened" &&
-    (await isAllowedTeamMember(ctx))
+  onPullRequest: async (ctx, pullRequest) => {
+    const botName = await resolveBotName().catch(() => null);
+    const body = pullRequest.raw as { body?: unknown };
+    const allowed = await isAllowedTeamMember(ctx);
+    if (!allowed) {
+      return null;
+    }
+    if (
+      botName !== null &&
+      BODY_MENTION_ACTIONS.has(pullRequest.action) &&
+      bodyMentionsBot(body.body, botName)
+    ) {
+      return { auth: stampGithubTrusted(ctx) };
+    }
+    return pullRequest.action === "opened"
       ? { auth: stampGithubTrusted(ctx), context: [PR_SUMMARY_TASK] }
-      : null,
+      : null;
+  },
 });

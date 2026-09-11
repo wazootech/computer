@@ -9,3 +9,7 @@ export function mentionPattern(botName: string): RegExp {
   const escaped = botName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(`@${escaped}(?=$|[^A-Za-z0-9_-])`, "iu");
 }
+
+export function bodyMentionsBot(body: unknown, botName: string): boolean {
+  return typeof body === "string" && mentionPattern(botName).test(body);
+}
