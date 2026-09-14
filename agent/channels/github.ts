@@ -11,9 +11,9 @@ import {
   FACTORY_LABEL,
 } from "../lib/constants.js";
 import {
-  bodyMentionsBot,
-  mentionPattern,
+  bodyMentionsAny,
   resolveBotName,
+  resolveInvocationNames,
 } from "../lib/github/bot-name.js";
 import { stampAutonomous, stampTrusted } from "../lib/trust.js";
 import {
@@ -273,23 +273,24 @@ export default githubChannel({
   onComment: async (ctx, comment) => {
     // A resolution failure means the mention can't be matched; acknowledge
     // without dispatching and let the next event retry.
-    const botName = await resolveBotName().catch(() => null);
-    if (botName === null) {
+    const invocationNames = await resolveInvocationNames().catch(() => null);
+    const botName = invocationNames?.[0] ?? null;
+    if (botName === null || invocationNames === null) {
       return null;
     }
     return !isIgnoredComment(comment, botName) &&
-      mentionPattern(botName).test(comment.body) &&
+      bodyMentionsAny(comment.body, invocationNames) &&
       (await isAllowedTeamMember(ctx))
       ? { auth: stampGithubTrusted(ctx) }
       : null;
   },
   onIssue: async (ctx, issue) => {
-    const botName = await resolveBotName().catch(() => null);
+    const invocationNames = await resolveInvocationNames().catch(() => null);
     const body = issue.raw as { body?: unknown };
     if (
-      botName !== null &&
+      invocationNames !== null &&
       BODY_MENTION_ACTIONS.has(issue.action) &&
-      bodyMentionsBot(body.body, botName) &&
+      bodyMentionsAny(body.body, invocationNames) &&
       (await isAllowedTeamMember(ctx))
     ) {
       return { auth: stampGithubTrusted(ctx) };
@@ -315,16 +316,16 @@ export default githubChannel({
     };
   },
   onPullRequest: async (ctx, pullRequest) => {
-    const botName = await resolveBotName().catch(() => null);
+    const invocationNames = await resolveInvocationNames().catch(() => null);
     const body = pullRequest.raw as { body?: unknown };
     const allowed = await isAllowedTeamMember(ctx);
     if (!allowed) {
       return null;
     }
     if (
-      botName !== null &&
+      invocationNames !== null &&
       BODY_MENTION_ACTIONS.has(pullRequest.action) &&
-      bodyMentionsBot(body.body, botName)
+      bodyMentionsAny(body.body, invocationNames)
     ) {
       return { auth: stampGithubTrusted(ctx) };
     }
