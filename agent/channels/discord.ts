@@ -15,6 +15,12 @@ import { discordPolicyConfigFromEnv, resolveDiscordAccess } from "../../lib/disc
  * runs the guided setup). Nothing here reads or stores a secret. The channel
  * stays silent wherever no allowlist matches, including DMs.
  */
+
+// Parse the admission policy once at module load rather than per interaction:
+// discordPolicyConfigFromEnv is fail-fast (it throws on tier-overlap
+// misconfiguration), so parsing here turns a bad deployment into a boot-time
+// crash instead of a per-request error.
+const discordPolicyConfig = discordPolicyConfigFromEnv();
 export default discordChannel({
   onCommand: (_ctx, interaction) => {
     const access = resolveDiscordAccess(
@@ -24,7 +30,7 @@ export default discordChannel({
         userId: interaction.user.id,
         memberRoleIds: interaction.member?.roles ?? [],
       },
-      discordPolicyConfigFromEnv(),
+      discordPolicyConfig,
     );
     if (!access) return null;
     return {
