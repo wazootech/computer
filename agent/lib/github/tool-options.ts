@@ -38,12 +38,15 @@ export function githubToolOptionsFor(target: RepositoryTarget) {
 }
 
 export function bindGithubTool(toolName: string, target: RepositoryTarget): ToolDefinition {
-  const inner = buildEveToolDefinition(toolName as never, githubToolOptionsFor(target) as never) as ToolDefinition;
+  const definition = buildEveToolDefinition(
+    toolName as never,
+    githubToolOptionsFor(target) as never,
+  ) as ToolDefinition;
   return defineTool({
-    approval: inner.approval,
-    description: inner.description,
-    inputSchema: inner.inputSchema,
-    outputSchema: inner.outputSchema,
+    approval: definition.approval,
+    description: definition.description,
+    inputSchema: definition.inputSchema,
+    outputSchema: definition.outputSchema,
     async execute(input, ctx) {
       const boundInput: Record<string, unknown> = {
         ...(input as Record<string, unknown>),
@@ -57,7 +60,11 @@ export function bindGithubTool(toolName: string, target: RepositoryTarget): Tool
       ) {
         boundInput.query = repositoryScopedSearchQuery(boundInput.query, target);
       }
-      return inner.execute(boundInput, ctx);
+      const runtimeTool = buildEveToolDefinition(
+        toolName as never,
+        githubToolOptionsFor(target) as never,
+      ) as ToolDefinition;
+      return runtimeTool.execute(boundInput, ctx);
     },
   });
 }
