@@ -109,6 +109,7 @@ describe("resolveDiscordAccess", () => {
 describe("discordPolicyConfigFromEnv", () => {
   it("reads the six allowlists from the environment", () => {
     const parsed = discordPolicyConfigFromEnv({
+      NODE_ENV: "development",
       DISCORD_PUBLIC_GUILD_IDS: "g1",
       DISCORD_PUBLIC_CHANNEL_IDS: "c1, c2",
       DISCORD_INTERNAL_GUILD_IDS: "",
