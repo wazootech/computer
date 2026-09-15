@@ -1,38 +1,56 @@
 import { buildEveToolDefinition } from "@github-tools/sdk/eve-runtime";
 import { defineTool, type ToolDefinition } from "eve/tools";
+import type { ApprovalContext, ApprovalStatus } from "eve/tools/approval";
 import {
   repositoryScopedSearchQuery,
   type RepositoryTarget,
 } from "./repository-target.js";
+import { mintInstallationToken } from "./app-token.js";
 import {
   closeIssuePolicy,
   commentPolicy,
   createPullRequestPolicy,
   labelPolicy,
   shipPolicy,
-  teamApproval,
   updateIssuePolicy,
   writePolicy,
 } from "./approval.js";
-import { mintInstallationToken } from "./app-token.js";
+import { teamApprovalResponse } from "./team-approval.js";
+
+function baseToolName(toolName: string): string {
+  const separator = toolName.lastIndexOf("__");
+  return separator === -1 ? toolName : toolName.slice(separator + 2);
+}
+
+function githubApprovalRequest(ctx: ApprovalContext): ApprovalStatus {
+  switch (baseToolName(ctx.toolName)) {
+    case "addAssignees":
+    case "addPullRequestComment":
+    case "createIssue":
+    case "removeAssignees":
+    case "requestReviewers":
+      return writePolicy(ctx);
+    case "addIssueComment":
+      return commentPolicy(ctx);
+    case "addLabels":
+    case "removeLabel":
+      return labelPolicy(ctx);
+    case "closeIssue":
+      return closeIssuePolicy();
+    case "createPullRequest":
+      return createPullRequestPolicy(ctx);
+    case "updateIssue":
+      return updateIssuePolicy(ctx);
+    case "updatePullRequest":
+      return shipPolicy(ctx);
+    default:
+      return "not-applicable";
+  }
+}
 
 export function githubToolOptionsFor(target: RepositoryTarget) {
   return {
     context: { owner: target.owner, repo: target.name },
-    requireApproval: {
-      addAssignees: teamApproval(writePolicy),
-      addIssueComment: teamApproval(commentPolicy),
-      addLabels: teamApproval(labelPolicy),
-      addPullRequestComment: teamApproval(writePolicy),
-      closeIssue: teamApproval(closeIssuePolicy),
-      createIssue: teamApproval(writePolicy),
-      createPullRequest: teamApproval(createPullRequestPolicy),
-      removeAssignees: teamApproval(writePolicy),
-      removeLabel: teamApproval(labelPolicy),
-      requestReviewers: teamApproval(writePolicy),
-      updateIssue: teamApproval(updateIssuePolicy),
-      updatePullRequest: teamApproval(shipPolicy),
-    },
     token: mintInstallationToken,
   };
 }
@@ -43,7 +61,7 @@ export function bindGithubTool(toolName: string, target: RepositoryTarget): Tool
     githubToolOptionsFor(target) as never,
   ) as ToolDefinition;
   return defineTool({
-    approval: definition.approval,
+    approval: { request: githubApprovalRequest, response: teamApprovalResponse },
     description: definition.description,
     inputSchema: definition.inputSchema,
     outputSchema: definition.outputSchema,
