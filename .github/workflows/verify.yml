@@ -18,8 +18,11 @@ jobs:
       # pnpm 10 on purpose: pnpm v11 dropped support for this repo's
       # package.json "pnpm.overrides" and fails --frozen-lockfile with
       # ERR_PNPM_LOCKFILE_CONFIG_MISMATCH (wazootech/computer#45).
-      - name: Activate pnpm 10
-        run: corepack prepare pnpm@10.34.5 --activate
+      # action-setup must run before setup-node so the pnpm binary is on
+      # PATH when setup-node's cache: pnpm looks for it.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
 
       - uses: actions/setup-node@v4
         with:
