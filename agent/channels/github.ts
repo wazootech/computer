@@ -279,11 +279,18 @@ export default githubChannel({
     if (botName === null || invocationNames === null) {
       return null;
     }
-    return !isIgnoredComment(comment, botName) &&
-      bodyMentionsAny(comment.body, invocationNames) &&
-      (await isAllowedTeamMember(ctx))
-      ? { auth: stampGithubTrusted(ctx) }
-      : null;
+    const invoked =
+      !isIgnoredComment(comment, botName) &&
+      bodyMentionsAny(comment.body, invocationNames);
+    if (!invoked || !(await isAllowedTeamMember(ctx))) {
+      return null;
+    }
+    try {
+      await ctx.thread.react("eyes");
+    } catch {
+      // The reaction is observability only; invocation must not depend on it.
+    }
+    return { auth: stampGithubTrusted(ctx) };
   },
   onIssue: async (ctx, issue) => {
     const invocationNames = await resolveInvocationNames().catch(() => null);
