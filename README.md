@@ -53,7 +53,19 @@ The production runtime needs `BETTER_AUTH_SECRET`, `VERCEL_APP_CLIENT_ID`, `VERC
 The GitHub channel uses Eve's native GitHub App authentication with the WazooComputer App credentials. It does not require `GITHUB_CONNECTOR`. The GitHub webhook secret authenticates inbound events; the App private key and installation ID authorize GitHub API calls and sandbox egress.
 A direct `@wazootech/computer` invocation is accepted in an issue or pull-request body when it is opened or edited, in issue and pull-request timeline comments, and in inline pull-request review comments. It routes to the WazooComputer App executor; `@wazoocomputer` and `@wazoocomputer[bot]` remain compatibility aliases. Direct invocations require the sender to be an active member of the configured approver team.
 
-Discord is not connected yet. The planned Discord bot will use the same Computer identity and pipeline with channel- and role-aware authorization.
+## Discord channel (staged)
+
+A controlled Discord channel is wired at `agent/channels/discord.ts` on eve's native Discord integration. It is default-deny: without operator configuration the bot never dispatches anywhere, including DMs.
+
+Operator setup:
+
+1. Create the Discord application and bot. Either run the guided Connect setup (`pnpm eve add channel/discord`, which stores the bot token in Vercel Connect), or set `DISCORD_APPLICATION_ID`, `DISCORD_BOT_TOKEN`, and `DISCORD_PUBLIC_KEY` as deployment secrets and point the application's Interactions Endpoint URL at `POST /eve/v1/discord`.
+2. Register the `/ask` application command. The guided setup registers it; the manual path is documented in eve's Discord channel docs (`node_modules/eve/docs/channels/discord.mdx`).
+3. Configure the allowlists as deployment environment variables (comma-separated ids): `DISCORD_PUBLIC_GUILD_IDS`, `DISCORD_PUBLIC_CHANNEL_IDS`, `DISCORD_INTERNAL_GUILD_IDS`, `DISCORD_INTERNAL_CHANNEL_IDS`, `DISCORD_INTERNAL_USER_IDS`, `DISCORD_INTERNAL_ROLE_IDS`.
+
+Policy: the public tier (allowlisted public support channels) is read-only with respect to Wazoo systems and answers from public-safe knowledge only. The internal team tier (allowlisted internal channels plus an allowlisted user or role) may expose approved internal context, with destructive, public, and externally communicative actions still behind approval gates (eve renders HITL confirmations as Discord components). Internal replies are ephemeral, visible only to the invoking user, so internal context does not linger in a shared channel. Admission is computed from the full request context with default deny and fails closed. Public and internal sessions use distinct principals and never share context. A channel id may not appear in both the public and internal allowlists; the environment parser rejects such a configuration at startup.
+
+Operator controls: allowlists change through deployment environment variables, and clearing them (or removing the channel file) silences the bot everywhere. Route health follows the Vercel deployment checks plus the `/eve/v1/discord` interaction route. The admission policy is pure and covered by `pnpm test`. Reconnect handling does not apply in this mode: the channel is webhook-based (no persistent socket), and signature verification plus delivery retries come from eve's native channel runtime.
 
 ## Validation
 
