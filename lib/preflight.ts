@@ -1,8 +1,13 @@
 import { createSign } from "node:crypto";
 
+import {
+  DEFAULT_DEEPSEEK_BASE_URL,
+  DEFAULT_DEEPSEEK_MODEL,
+  resolveDeepSeekModel,
+  resolveDeepSeekThinking,
+} from "./deepseek.ts";
+
 const GITHUB_API_VERSION = "2022-11-28";
-const DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash";
-const DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com";
 
 type Environment = Record<string, string | undefined>;
 type Fetch = typeof fetch;
@@ -136,7 +141,7 @@ async function checkDeepSeek(
   env: Environment,
   fetchImpl: Fetch,
 ): Promise<PreflightResult["deepSeek"]> {
-  const model = env.DEEPSEEK_MODEL?.trim() || DEFAULT_DEEPSEEK_MODEL;
+  const model = resolveDeepSeekModel(env);
   const apiKey = env.DEEPSEEK_API_KEY;
   if (!apiKey?.trim()) {
     return { ok: false, model, status: null, error: "DEEPSEEK_API_KEY is missing" };
@@ -155,6 +160,11 @@ async function checkDeepSeek(
         messages: [{ role: "user", content: "Reply with exactly OK." }],
         max_tokens: 4,
         temperature: 0,
+        // Mirror the agent wiring (agent/lib/models.ts) so preflight proves
+        // the exact request shape the agent will send — including the
+        // thinking-mode pin, without which V4.1-Flash's default (thinking
+        // ON) would make preflight validate a different behavior.
+        thinking: { type: resolveDeepSeekThinking(env) },
       }),
     });
     if (!response.ok) {
@@ -228,7 +238,7 @@ export async function runPreflight(
     : {
         ok: true,
         skipped: true,
-        model: env.DEEPSEEK_MODEL?.trim() || DEFAULT_DEEPSEEK_MODEL,
+        model: resolveDeepSeekModel(env),
         status: null,
       };
   const ok = githubApp.ok && deepSeek.ok && missingSecrets(secrets).length === 0;
