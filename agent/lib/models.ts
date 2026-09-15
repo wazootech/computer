@@ -6,7 +6,7 @@ const deepseek = createOpenAICompatible({
   name: "deepseek",
 });
 
-const model = deepseek(process.env.DEEPSEEK_MODEL ?? "deepseek-v4-flash");
+const model = deepseek(process.env.DEEPSEEK_MODEL ?? "deepseek-flash");
 
 export const MODELS = {
   analyst: model,
