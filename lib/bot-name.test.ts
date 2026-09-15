@@ -42,3 +42,15 @@ test("invocation names include the configured bot and team alias", async () => {
     else process.env.COMPUTER_TEAM_MENTION = previousTeamMention;
   }
 });
+
+test("native GitHub comment botName resolves to the team alias", async () => {
+  const previousTeamMention = process.env.COMPUTER_TEAM_MENTION;
+  delete process.env.COMPUTER_TEAM_MENTION;
+  try {
+    const { resolveTeamMention } = await import("../agent/lib/github/bot-name.ts");
+    assert.equal(await resolveTeamMention(), "wazootech/computer");
+  } finally {
+    if (previousTeamMention === undefined) delete process.env.COMPUTER_TEAM_MENTION;
+    else process.env.COMPUTER_TEAM_MENTION = previousTeamMention;
+  }
+});

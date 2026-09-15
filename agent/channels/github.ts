@@ -14,6 +14,7 @@ import {
   bodyMentionsAny,
   resolveBotName,
   resolveInvocationNames,
+  resolveTeamMention,
 } from "../lib/github/bot-name.js";
 import { stampAutonomous, stampTrusted } from "../lib/trust.js";
 import {
@@ -246,7 +247,7 @@ const BODY_MENTION_ACTIONS = new Set(["opened", "edited"]);
  *   collaborators ever reach the waiting session.
  */
 export default githubChannel({
-  botName: resolveBotName,
+  botName: resolveTeamMention,
   credentials: githubCredentials,
   onCheckSuite: async (ctx, suite) => {
     const raw = suite.raw as {
