@@ -72,6 +72,65 @@ test("proves the installation token carries members read and can read the approv
   assert.equal(calls[1]?.authorization, "Bearer installation-token");
 });
 
+test("deepseek probe sends the default model and thinking pin like the agent wiring", async () => {
+  const bodies: string[] = [];
+  const result = await runPreflight(
+    {
+      GITHUB_APP_ID: "4864396",
+      GITHUB_APP_INSTALLATION_ID: "159856502",
+      GITHUB_APP_PRIVATE_KEY: "not-a-key",
+      FACTORY_APPROVAL_SECRET: "approval-secret",
+      DEEPSEEK_API_KEY: "deepseek-key",
+    },
+    async (_input, init) => {
+      if (String(init?.body).includes("chat/completions") || init?.body != null) {
+        bodies.push(String(init?.body));
+      }
+      if (String(init?.body).includes("deepseek")) {
+        return new Response(JSON.stringify({ choices: [{ message: { content: "OK" } }] }), { status: 200 });
+      }
+      return new Response("{}", { status: 500 });
+    },
+  );
+
+  const probe = bodies.find((b) => b.includes("chat/completions") || b.includes("deepseek"));
+  assert.ok(probe, "deepseek probe body captured");
+  const parsed = JSON.parse(probe) as { model: string; thinking?: { type: string } };
+  assert.equal(parsed.model, "deepseek-flash");
+  assert.deepEqual(parsed.thinking, { type: "disabled" });
+  assert.equal(result.deepSeek.model, "deepseek-flash");
+});
+
+test("deepseek probe honors DEEPSEEK_MODEL and DEEPSEEK_THINKING overrides", async () => {
+  const bodies: string[] = [];
+  const result = await runPreflight(
+    {
+      GITHUB_APP_ID: "4864396",
+      GITHUB_APP_INSTALLATION_ID: "159856502",
+      GITHUB_APP_PRIVATE_KEY: "not-a-key",
+      FACTORY_APPROVAL_SECRET: "approval-secret",
+      DEEPSEEK_API_KEY: "deepseek-key",
+      DEEPSEEK_MODEL: "deepseek-v4-flash",
+      DEEPSEEK_THINKING: "enabled",
+    },
+    async (_input, init) => {
+      if (init?.body != null) bodies.push(String(init.body));
+      if (String(init?.body).includes("model")) {
+        return new Response(JSON.stringify({ choices: [{ message: { content: "OK" } }] }), { status: 200 });
+      }
+      return new Response("{}", { status: 500 });
+    },
+  );
+
+  const probe = bodies.map((b) => { try { return JSON.parse(b); } catch { return null; } }).find(
+    (b) => b && typeof b === "object" && "model" in b,
+  ) as { model: string; thinking?: { type: string } } | undefined;
+  assert.ok(probe, "deepseek probe body captured");
+  assert.equal(probe.model, "deepseek-v4-flash");
+  assert.deepEqual(probe.thinking, { type: "enabled" });
+  assert.equal(result.deepSeek.model, "deepseek-v4-flash");
+});
+
 test("can skip the DeepSeek check while validating GitHub credentials", async () => {
   const result = await runPreflight(
     {
