@@ -40,7 +40,7 @@ export function parseIdList(raw: string | undefined): string[] {
 }
 
 export function discordPolicyConfigFromEnv(env: NodeJS.ProcessEnv = process.env): DiscordPolicyConfig {
-  return {
+  const config = {
     publicGuildIds: parseIdList(env.DISCORD_PUBLIC_GUILD_IDS),
     publicChannelIds: parseIdList(env.DISCORD_PUBLIC_CHANNEL_IDS),
     internalGuildIds: parseIdList(env.DISCORD_INTERNAL_GUILD_IDS),
@@ -48,6 +48,18 @@ export function discordPolicyConfigFromEnv(env: NodeJS.ProcessEnv = process.env)
     internalUserIds: parseIdList(env.DISCORD_INTERNAL_USER_IDS),
     internalRoleIds: parseIdList(env.DISCORD_INTERNAL_ROLE_IDS),
   };
+  // Fail fast on the one misconfiguration that would otherwise depend on code
+  // order: a channel id in both tier allowlists would silently demote internal
+  // users to the public tier. The resolver's tie-break (public wins) stays as
+  // defense-in-depth for hand-built configs, but the environment must never
+  // produce an overlapping configuration.
+  const overlap = config.publicChannelIds.filter((id) => config.internalChannelIds.includes(id));
+  if (overlap.length > 0) {
+    throw new Error(
+      `Discord channel misconfiguration: channel id(s) ${overlap.join(", ")} appear in both DISCORD_PUBLIC_CHANNEL_IDS and DISCORD_INTERNAL_CHANNEL_IDS. A channel must belong to exactly one tier.`,
+    );
+  }
+  return config;
 }
 
 function isGuildAllowlisted(guildId: string | undefined, guildIds: readonly string[]): boolean {
@@ -66,6 +78,10 @@ function isGuildAllowlisted(guildId: string | undefined, guildIds: readonly stri
  *
  * The returned principal ids differ per tier, so public and internal sessions
  * never share a principal, and every emitted attribute set carries its tier.
+ *
+ * If a hand-built config lists a channel in both tiers (the environment parser
+ * rejects that), the public branch wins by evaluation order — the fail-safe
+ * direction, since the public tier is the read-only one.
  */
 export function resolveDiscordAccess(
   request: DiscordAccessRequest,

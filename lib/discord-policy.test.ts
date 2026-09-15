@@ -93,6 +93,17 @@ describe("resolveDiscordAccess", () => {
     );
     assert.equal(access, null);
   });
+
+  it("resolves a tier overlap deterministically: public wins when a channel id is in both allowlists", () => {
+    // Unreachable through the environment (discordPolicyConfigFromEnv rejects
+    // overlap), but the tie-break stays contractual for hand-built configs:
+    // the public tier is the fail-safe, read-only direction.
+    const overlapping = { ...config, publicChannelIds: ["chan-support", "chan-team"] };
+    assert.deepEqual(resolveDiscordAccess({ ...base, guildId: "guild-public", channelId: "chan-team" }, overlapping), {
+      tier: "public",
+      principalId: "discord-public:user-unknown",
+    });
+  });
 });
 
 describe("discordPolicyConfigFromEnv", () => {
@@ -104,7 +115,7 @@ describe("discordPolicyConfigFromEnv", () => {
       DISCORD_INTERNAL_CHANNEL_IDS: "c3",
       DISCORD_INTERNAL_USER_IDS: "u1",
       DISCORD_INTERNAL_ROLE_IDS: "r1,r2",
-    } as unknown as NodeJS.ProcessEnv);
+    });
     assert.deepEqual(parsed, {
       publicGuildIds: ["g1"],
       publicChannelIds: ["c1", "c2"],
