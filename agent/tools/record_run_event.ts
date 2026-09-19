@@ -2,6 +2,7 @@ import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { appendRunEvent } from "#lib/run-records.js";
 import { repositoryTargetFromAuth } from "#lib/github/repository-target.js";
+import { RUN_ID_PATTERN } from "#lib/run-history.js";
 
 const usage = z.object({
   inputTokens: z.number().int().nonnegative().optional(),
@@ -11,21 +12,22 @@ const usage = z.object({
 });
 
 export default defineTool({
-  description: "Append one redacted software-factory stage, approval, output, or failure event to an existing Computer run record in Vercel Blob. Summaries and outputs must be concise and must not contain credentials or raw customer data.",
+  description: "Append one redacted software-factory stage, approval, output, or failure event to the canonical run history. Provide a stable idempotencyKey when replaying an external delivery or lifecycle event.",
   inputSchema: z.object({
     failure: z.unknown().optional(),
+    idempotencyKey: z.string().min(1).max(300).optional(),
     kind: z.enum(["stage", "approval", "output", "failure"]),
     output: z.unknown().optional(),
-    runId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u),
+    runId: z.string().regex(RUN_ID_PATTERN),
     stage: z.string().min(1).max(120),
     status: z.enum(["started", "completed", "pending", "approved", "rejected", "failed"]),
     summary: z.string().min(1).max(4000),
     usage: usage.optional(),
   }),
-  outputSchema: z.object({ path: z.string() }),
+  outputSchema: z.object({ duplicate: z.boolean(), path: z.string() }),
   async execute(input, ctx) {
     const target = repositoryTargetFromAuth(ctx.session.auth);
     if (!target) throw new Error("No verified GitHub repository is attached to this session.");
-    return appendRunEvent(input.runId, input, target);
+    return appendRunEvent(input.runId, input, target, input.idempotencyKey);
   },
 });

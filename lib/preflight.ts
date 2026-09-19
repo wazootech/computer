@@ -6,6 +6,7 @@ import {
   resolveDeepSeekModel,
   resolveDeepSeekThinking,
 } from "./deepseek.ts";
+import { validateFactoryLabelConfiguration } from "../agent/lib/constants.ts";
 
 const GITHUB_API_VERSION = "2022-11-28";
 
@@ -13,6 +14,29 @@ type Environment = Record<string, string | undefined>;
 type Fetch = typeof fetch;
 
 export type SecretStatus = Record<string, boolean>;
+
+export type AcceptanceTargetValidation = {
+  ok: boolean;
+  errors: string[];
+};
+
+export type AcceptanceTarget = {
+  repository: string;
+  issueNumber: number;
+  baseSha: string;
+  worktree: string;
+  disposable: boolean;
+};
+
+export function validateAcceptanceTarget(target: AcceptanceTarget): { ok: boolean; errors: string[] } {
+  const errors: string[] = [];
+  if (!/^[^/\s]+\/[^/\s]+$/u.test(target.repository)) errors.push("repository must be owner/name");
+  if (!Number.isSafeInteger(target.issueNumber) || target.issueNumber <= 0) errors.push("issueNumber must be positive");
+  if (!/^[0-9a-f]{40}$/iu.test(target.baseSha)) errors.push("baseSha must be a full commit SHA");
+  if (!target.worktree.trim()) errors.push("worktree is required");
+  if (!target.disposable) errors.push("target must be explicitly disposable");
+  return { errors, ok: errors.length === 0 };
+}
 
 export type PreflightResult = {
   ok: boolean;
@@ -32,6 +56,10 @@ export type PreflightResult = {
     model: string;
     status: number | null;
     error?: string;
+  };
+  factoryLabels: {
+    ok: boolean;
+    errors: string[];
   };
 };
 
@@ -241,8 +269,10 @@ export async function runPreflight(
         model: resolveDeepSeekModel(env),
         status: null,
       };
-  const ok = githubApp.ok && deepSeek.ok && missingSecrets(secrets).length === 0;
-  return { ok, secrets, githubApp, deepSeek };
+  const factoryLabelErrors = validateFactoryLabelConfiguration(env);
+  const factoryLabels = { errors: factoryLabelErrors, ok: factoryLabelErrors.length === 0 };
+  const ok = githubApp.ok && deepSeek.ok && factoryLabels.ok && missingSecrets(secrets).length === 0;
+  return { ok, secrets, githubApp, deepSeek, factoryLabels };
 }
 
 export function summarizeSecrets(

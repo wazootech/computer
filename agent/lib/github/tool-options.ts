@@ -16,13 +16,14 @@ import {
   writePolicy,
 } from "./approval.js";
 import { teamApprovalResponse } from "./team-approval.js";
+import { intakeIssueNumber, isFactoryRun } from "../trust.js";
 
 function baseToolName(toolName: string): string {
   const separator = toolName.lastIndexOf("__");
   return separator === -1 ? toolName : toolName.slice(separator + 2);
 }
 
-function githubApprovalRequest(ctx: ApprovalContext): ApprovalStatus {
+function githubApprovalRequest(ctx: ApprovalContext, boundIssueNumber?: number): ApprovalStatus {
   switch (baseToolName(ctx.toolName)) {
     case "addAssignees":
     case "addPullRequestComment":
@@ -34,9 +35,9 @@ function githubApprovalRequest(ctx: ApprovalContext): ApprovalStatus {
       return commentPolicy(ctx);
     case "addLabels":
     case "removeLabel":
-      return labelPolicy(ctx);
+      return labelPolicy(ctx, boundIssueNumber);
     case "closeIssue":
-      return closeIssuePolicy();
+      return closeIssuePolicy(ctx);
     case "createPullRequest":
       return createPullRequestPolicy(ctx);
     case "updateIssue":
@@ -61,7 +62,7 @@ export function bindGithubTool(toolName: string, target: RepositoryTarget): Tool
     githubToolOptionsFor(target) as never,
   ) as ToolDefinition;
   return defineTool({
-    approval: { request: githubApprovalRequest, response: teamApprovalResponse },
+    approval: { request: (ctx) => githubApprovalRequest(ctx, intakeIssueNumber(ctx.session.auth.current) ?? undefined), response: teamApprovalResponse },
     description: definition.description,
     inputSchema: definition.inputSchema,
     outputSchema: definition.outputSchema,
@@ -77,6 +78,10 @@ export function bindGithubTool(toolName: string, target: RepositoryTarget): Tool
         typeof boundInput.query === "string"
       ) {
         boundInput.query = repositoryScopedSearchQuery(boundInput.query, target);
+      }
+      if (isFactoryRun(ctx.session.auth.current) && (toolName === "addLabels" || toolName === "removeLabel")) {
+        const intakeIssue = intakeIssueNumber(ctx.session.auth.current);
+        if (intakeIssue !== null) boundInput.issueNumber = intakeIssue;
       }
       const runtimeTool = buildEveToolDefinition(
         toolName as never,

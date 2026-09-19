@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
 import test from "node:test";
-import { runPreflight, summarizeSecrets } from "./preflight.ts";
+import { runPreflight, summarizeSecrets, validateAcceptanceTarget } from "./preflight.ts";
 
 test("summarizes secret presence without returning secret values", () => {
   const result = summarizeSecrets({
@@ -146,4 +146,24 @@ test("can skip the DeepSeek check while validating GitHub credentials", async ()
   assert.equal(result.deepSeek.ok, true);
   assert.equal(result.deepSeek.skipped, true);
   assert.equal(result.githubApp.ok, false);
+});
+
+test("validates an explicitly disposable acceptance target", () => {
+  const valid = validateAcceptanceTarget({ repository: "wazootech/wazoo-console", issueNumber: 84, baseSha: "a".repeat(40), worktree: "/tmp/factory", disposable: true });
+  assert.deepEqual(valid, { ok: true, errors: [] });
+
+  const invalid = validateAcceptanceTarget({ repository: "not-a-repository", issueNumber: 0, baseSha: "bad", worktree: "", disposable: false });
+  assert.equal(invalid.ok, false);
+  assert.equal(invalid.errors.length, 5);
+});
+
+test("preflight rejects conflicting factory label configuration", async () => {
+  const result = await runPreflight({
+    FACTORY_APPROVAL_SECRET: "approval-secret",
+    FACTORY_CANDIDATE_LABEL: "same",
+    FACTORY_PROMOTED_LABEL: "same",
+  }, async () => { throw new Error("network should not be called"); }, { checkDeepSeek: false });
+  assert.equal(result.factoryLabels.ok, false);
+  assert.match(result.factoryLabels.errors.join(" "), /differ|unique/u);
+  assert.equal(result.ok, false);
 });

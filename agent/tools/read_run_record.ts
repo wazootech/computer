@@ -1,24 +1,29 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
-import { readDocument } from "#lib/blob.js";
-import { runRecordPath } from "#lib/run-records.js";
+import { RUN_ID_PATTERN, readLegacyRunRecord, readRunHistory } from "#lib/run-records.js";
 import { repositoryTargetFromAuth } from "#lib/github/repository-target.js";
 
 export default defineTool({
-  description: "Read a redacted Computer software-factory run record from Vercel Blob by run ID. Use this for status and handoff context; records contain no credentials.",
-  inputSchema: z.object({ runId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u) }),
+  description: "Read a canonical redacted Computer software-factory run history by its stable run ID. The history contains lifecycle events, approvals, stage lineage, outcomes, and no raw credentials or customer content.",
+  inputSchema: z.object({ runId: z.string().regex(RUN_ID_PATTERN) }),
   outputSchema: z.object({ found: z.boolean(), path: z.string(), record: z.string(), error: z.string().optional() }),
   async execute({ runId }, ctx) {
     const target = repositoryTargetFromAuth(ctx.session.auth);
     if (!target) return { error: "No verified GitHub repository is attached to this session.", found: false, path: "", record: "" };
-    const path = runRecordPath(target, runId);
     try {
-      const document = await readDocument(path);
-      return document.found
-        ? { found: true, path, record: document.content }
-        : { found: false, path, record: "" };
+      const result = await readRunHistory(target, runId);
+      if (result.found) {
+        return { found: true, path: result.path, record: JSON.stringify(result.record, null, 2) };
+      }
+      if (result.reason === "expired") {
+        return { found: false, path: result.path, record: "" };
+      }
+      const legacy = await readLegacyRunRecord(target, runId);
+      return "content" in legacy
+        ? { found: true, path: legacy.path, record: legacy.content }
+        : { found: false, path: legacy.path, record: "" };
     } catch (error) {
-      return { error: error instanceof Error ? error.message : "Failed to read run record", found: false, path, record: "" };
+      return { error: error instanceof Error ? error.message : "Failed to read run history", found: false, path: "", record: "" };
     }
   },
 });

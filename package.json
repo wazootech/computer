@@ -16,7 +16,8 @@
     "test": "node --test lib/*.test.ts",
     "build:eve": "eve build",
     "dev:eve": "eve dev",
-    "start:eve": "eve start"
+    "start:eve": "eve start",
+    "acceptance:repeatability": "node --experimental-strip-types scripts/acceptance-repeatability.ts"
   },
   "dependencies": {
     "@ai-sdk/deepseek": "3.0.36",
