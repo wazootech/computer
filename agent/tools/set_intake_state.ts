@@ -78,6 +78,9 @@ const tool = defineTool({
     const currentState = intakeStateForLabels([...labels]);
     let plan: { duplicate: boolean; add: string[]; remove: string[] };
     if (currentState === null && decisionClaim.duplicate && decisionClaim.state === input.state) {
+      if (!labels.has(FACTORY_CANDIDATE_LABEL) && !labels.has(WAYFINDER_TASK_LABEL)) {
+        throw new Error("The claimed intake decision cannot be reconciled without a valid candidate or task label.");
+      }
       const fallback = stateLabelsForTransition([...labels], input.state as IntakeState);
       plan = { duplicate: false, ...fallback };
     } else {

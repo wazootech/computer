@@ -46,7 +46,7 @@ function intakeLabelInput(ctx: ApprovalContext): { issueNumber?: unknown; labels
   return (ctx.toolInput ?? {}) as { issueNumber?: unknown; labels?: unknown; label?: unknown };
 }
 
-export function labelPolicy(ctx: ApprovalContext): ApprovalStatus {
+export function labelPolicy(ctx: ApprovalContext, boundIssueNumber?: number): ApprovalStatus {
   const auth = ctx.session.auth.current;
   const input = intakeLabelInput(ctx);
   const labels = [
@@ -55,7 +55,8 @@ export function labelPolicy(ctx: ApprovalContext): ApprovalStatus {
   ];
   if (isFactoryRun(auth)) {
     const intakeIssue = intakeIssueNumber(auth);
-    if (input.issueNumber !== intakeIssue) return denied("Factory runs may change terminal state only on their originating issue.");
+    const issueNumber = typeof input.issueNumber === "number" ? input.issueNumber : boundIssueNumber;
+    if (issueNumber !== intakeIssue) return denied("Factory runs may change terminal state only on their originating issue.");
     const adding = Array.isArray(input.labels);
     if (adding && labels.length === 1 && FACTORY_TERMINAL_LABELS.includes(labels[0] as (typeof FACTORY_TERMINAL_LABELS)[number])) return "not-applicable";
     if (!adding && labels.length === 1 && labels[0] === FACTORY_RUNNING_LABEL) return "not-applicable";
