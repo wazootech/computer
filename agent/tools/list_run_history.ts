@@ -9,6 +9,7 @@ export default defineTool({
   description: "List canonical redacted Computer run-history summaries for the verified repository, newest first.",
   inputSchema: z.object({
     deliveryId: z.string().min(1).max(300).optional(),
+    includeExpired: z.boolean().optional(),
     issueNumber: z.number().int().positive().optional(),
     limit: z.number().int().min(1).max(100).optional(),
     pullRequestNumber: z.number().int().positive().optional(),

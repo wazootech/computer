@@ -459,15 +459,6 @@ export async function claimIntakeDecision(
   return { duplicate, issueNumber: input.issueNumber, path, state: input.state };
 }
 
-export async function releaseIntakeDelivery(
-  target: RepositoryTarget,
-  input: { issueNumber: number; deliveryId: string; mode: "candidate" | "promoted" },
-): Promise<void> {
-  const path = `${intakePrefix(target, input.issueNumber)}${input.mode}/${segment(input.deliveryId)}.json`;
-  const claim = await readJson<{ deliveryId?: string }>(path);
-  if (claim?.deliveryId === input.deliveryId) await del(path);
-}
-
 export const runHistoryPrefixFor = (target: RepositoryTarget, runId: string): string => runPrefix(target, runId);
 
 export const blobRunHistoryStore: RunHistoryStore = {

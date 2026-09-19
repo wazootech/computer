@@ -26,7 +26,7 @@ import {
   resolveInvocationNames,
   resolveTeamMention,
 } from "../lib/github/bot-name.js";
-import { claimIntakeDelivery, releaseIntakeDelivery } from "../lib/run-history.js";
+import { claimIntakeDelivery } from "../lib/run-history.js";
 import { stampAutonomous, stampSource, stampTrusted } from "../lib/trust.js";
 import {
   repositoryAttributes,
