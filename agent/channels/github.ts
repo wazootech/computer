@@ -427,11 +427,6 @@ export default githubChannel({
     try {
       const promotionResult = await markPromotedIssueRunning(ctx, issue.issueNumber, [...labels]);
       if (promotionResult === "invalid") {
-        await releaseIntakeDelivery(target, {
-          deliveryId: ctx.delivery.id,
-          issueNumber: issue.issueNumber,
-          mode: "promoted",
-        });
         return null;
       }
     } catch (error) {

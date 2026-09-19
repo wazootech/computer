@@ -14,6 +14,7 @@ import {
   isScheduleAppAuth,
   isTrusted,
 } from "../trust.js";
+import { allowsFactoryLabelMutation } from "../../../lib/factory-label-policy.js";
 
 const denied = (reason: string): ApprovalStatus => ({ reason, type: "denied" });
 
@@ -60,6 +61,14 @@ export function labelPolicy(ctx: ApprovalContext, boundIssueNumber?: number): Ap
     const adding = Array.isArray(input.labels);
     if (adding && labels.length === 1 && FACTORY_TERMINAL_LABELS.includes(labels[0] as (typeof FACTORY_TERMINAL_LABELS)[number])) return "not-applicable";
     if (!adding && labels.length === 1 && labels[0] === FACTORY_RUNNING_LABEL) return "not-applicable";
+    if (allowsFactoryLabelMutation({
+      issueNumber,
+      labels,
+      mode: adding ? "addLabels" : "removeLabel",
+      originIssue: intakeIssue,
+      runningLabel: FACTORY_RUNNING_LABEL,
+      terminalLabels: FACTORY_TERMINAL_LABELS,
+    })) return "not-applicable";
     return denied("Factory runs may only add one terminal state label or remove factory:running on their originating issue.");
   }
   if (isAutonomous(auth) && labels.some((label) => FACTORY_STATE_LABELS.includes(label as (typeof FACTORY_STATE_LABELS)[number]))) {

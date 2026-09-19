@@ -81,6 +81,9 @@ const tool = defineTool({
       if (!labels.has(FACTORY_CANDIDATE_LABEL) && !labels.has(WAYFINDER_TASK_LABEL)) {
         throw new Error("The claimed intake decision cannot be reconciled without a valid candidate or task label.");
       }
+      if (input.state === "queued" && !labels.has(WAYFINDER_TASK_LABEL)) {
+        throw new Error("A reconciled queued decision still requires the wayfinder:task gate.");
+      }
       const fallback = stateLabelsForTransition([...labels], input.state as IntakeState);
       plan = { duplicate: false, ...fallback };
     } else {
