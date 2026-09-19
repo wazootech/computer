@@ -1,10 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { readDocument, writeDocument, RUN_RECORDS_PREFIX } from "./blob.js";
-import type { RepositoryTarget } from "./github/repository-target.js";
-import { repositoryScopeKey } from "./github/repository-target.js";
-import { redact } from "./redaction.js";
-
-const RUN_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/u;
+import { readDocument } from "./blob.js";
+import { RUN_RECORDS_PREFIX } from "./blob.js";
+import { appendRunHistoryEvent, readRunHistory, runHistoryRecordPath, startRunHistory } from "./run-history.js";
+import { repositoryScopeKey, type RepositoryTarget } from "./github/repository-target.js";
 
 export type RunEvent = {
   failure?: unknown;
@@ -21,54 +19,46 @@ export type RunEvent = {
   };
 };
 
-const runIdFor = (runId: string): string => {
-  if (!RUN_ID_PATTERN.test(runId)) throw new Error("runId contains unsupported characters");
-  return runId;
-};
-
 export const runRecordPath = (target: RepositoryTarget, runId: string): string =>
-  `${RUN_RECORDS_PREFIX}${repositoryScopeKey(target)}/${runIdFor(runId)}.md`;
+  runHistoryRecordPath(target, runId);
 
-const safeJson = (value: unknown): string => JSON.stringify(redact(value), null, 2);
+export const legacyRunRecordPath = (target: RepositoryTarget, runId: string): string =>
+  `${RUN_RECORDS_PREFIX}${repositoryScopeKey(target)}/${encodeURIComponent(runId)}.md`;
+
+export async function readLegacyRunRecord(target: RepositoryTarget, runId: string) {
+  const path = legacyRunRecordPath(target, runId);
+  const document = await readDocument(path);
+  return document.found ? { path, content: document.content } : { path };
+}
+
+const kindFor = (event: RunEvent): "stage.started" | "stage.completed" | "stage.failed" | "approval.requested" | "approval.resolved" | "output.recorded" | "run.failed" => {
+  if (event.kind === "failure") return "run.failed";
+  if (event.kind === "approval") return event.status === "pending" ? "approval.requested" : "approval.resolved";
+  if (event.kind === "output") return "output.recorded";
+  if (event.status === "failed") return "stage.failed";
+  return event.status === "started" ? "stage.started" : "stage.completed";
+};
 
 export async function startRunRecord(
   input: { runId?: string; summary: string; title: string },
-  target: RepositoryTarget
+  target: RepositoryTarget,
 ) {
-  const runId = runIdFor(input.runId ?? `run-${randomUUID().slice(0, 12)}`);
-  const path = runRecordPath(target, runId);
-  const existing = await readDocument(path);
-  if (existing.found) throw new Error(`Run record already exists: ${runId}`);
-  const document = [
-    `# ${redact(input.title)}`,
-    "",
-    `- Run ID: ${runId}`,
-    `- Target repository: ${target.fullName} (${target.id})`,
-    "- Status: running",
-    `- Started at: ${new Date().toISOString()}`,
-    "",
-    "## Summary",
-    "",
-    redact(input.summary),
-    "",
-    "## Events",
-    "",
-  ].join("\n");
-  await writeDocument(path, document, { allowOverwrite: false });
-  return { path, runId };
+  const runId = input.runId ?? `run-${randomUUID().slice(0, 12)}`;
+  const result = await startRunHistory({ runId, summary: input.summary, title: input.title }, target);
+  return { path: runRecordPath(target, runId), runId, duplicate: result.duplicate };
 }
 
-export async function appendRunEvent(
-  runId: string,
-  event: RunEvent,
-  target: RepositoryTarget
-) {
-  const path = runRecordPath(target, runId);
-  const existing = await readDocument(path);
-  if (!existing.found) throw new Error(`Run record not found: ${runId}`);
-  const timestamp = new Date().toISOString();
-  const safeEvent = redact({ ...event, timestamp });
-  const next = `${existing.content.trimEnd()}\n\n### ${timestamp} · ${event.kind} · ${event.stage}\n\n\`\`\`json\n${safeJson(safeEvent)}\n\`\`\`\n`;
-  await writeDocument(path, next, { allowOverwrite: true });
-  return { path };
+export async function appendRunEvent(runId: string, event: RunEvent, target: RepositoryTarget, idempotencyKey?: string) {
+  const result = await appendRunHistoryEvent({
+    data: { failure: event.failure, output: event.output, usage: event.usage },
+    idempotencyKey: idempotencyKey ?? `manual:${event.kind}:${event.stage}:${event.status}:${event.summary}`,
+    kind: kindFor(event),
+    runId,
+    stage: event.stage,
+    status: event.status === "pending" ? "waiting" : event.status === "failed" ? "failed" : undefined,
+    summary: event.summary,
+  }, target);
+  return { path: result.path, duplicate: result.duplicate };
 }
+
+export { readRunHistory } from "./run-history.js";

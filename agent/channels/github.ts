@@ -7,8 +7,18 @@ import {
 import {
   COMPUTER_APPROVER_ORG,
   COMPUTER_APPROVER_TEAM,
+  FACTORY_BLOCKED_LABEL,
+  FACTORY_CANDIDATE_LABEL,
+  FACTORY_COMPLETED_LABEL,
+  FACTORY_DUPLICATE_LABEL,
+  FACTORY_FAILED_LABEL,
   FACTORY_BRANCH_PREFIX,
-  FACTORY_LABEL,
+  FACTORY_MANUAL_LABEL,
+  FACTORY_NEEDS_CLARIFICATION_LABEL,
+  FACTORY_PROMOTED_LABEL,
+  FACTORY_QUEUED_LABEL,
+  FACTORY_RUNNING_LABEL,
+  WAYFINDER_TASK_LABEL,
 } from "../lib/constants.js";
 import {
   bodyMentionsAny,
@@ -16,7 +26,8 @@ import {
   resolveInvocationNames,
   resolveTeamMention,
 } from "../lib/github/bot-name.js";
-import { stampAutonomous, stampTrusted } from "../lib/trust.js";
+import { claimIntakeDelivery } from "../lib/run-history.js";
+import { stampAutonomous, stampSource, stampTrusted } from "../lib/trust.js";
 import {
   repositoryAttributes,
   repositoryTargetFromInbound,
@@ -56,8 +67,19 @@ const isIgnoredComment = (comment: GitHubComment, botName: string): boolean => {
   );
 };
 
-const stampGithubTrusted = (ctx: GitHubInboundContext) => {
-  const auth = stampTrusted(defaultGitHubAuth(ctx));
+const githubSourceAttributes = (ctx: GitHubInboundContext, sourceType: string, anchor?: number) => ({
+  githubDeliveryId: ctx.delivery.id,
+  intakeDeliveryId: ctx.delivery.id,
+  githubEvent: ctx.delivery.event,
+  githubConversationKind: ctx.conversation.kind,
+  githubIssueNumber: ctx.conversation.issueNumber ? String(ctx.conversation.issueNumber) : undefined,
+  githubPullRequestNumber: ctx.conversation.pullRequestNumber ? String(ctx.conversation.pullRequestNumber) : undefined,
+  githubSourceType: sourceType,
+  githubAnchor: anchor === undefined ? undefined : String(anchor),
+});
+
+const stampGithubTrusted = (ctx: GitHubInboundContext, sourceType = "direct_mention") => {
+  const auth = stampSource(stampTrusted(defaultGitHubAuth(ctx)), githubSourceAttributes(ctx, sourceType));
   return {
     ...auth,
     attributes: {
@@ -68,8 +90,13 @@ const stampGithubTrusted = (ctx: GitHubInboundContext) => {
   };
 };
 
-const stampGithubAutonomous = (ctx: GitHubInboundContext, anchor: number) => {
-  const auth = stampAutonomous(defaultGitHubAuth(ctx), anchor);
+const stampGithubAutonomous = (
+  ctx: GitHubInboundContext,
+  anchor: number,
+  mode: "intake" | "factory" | "ci-fix",
+  sourceType: string,
+) => {
+  const auth = stampSource(stampAutonomous(defaultGitHubAuth(ctx), anchor, mode), githubSourceAttributes(ctx, sourceType, anchor));
   return {
     ...auth,
     attributes: {
@@ -138,16 +165,45 @@ const isTrustedLabeler = async (
   }
 };
 
+const markPromotedIssueRunning = async (
+  ctx: GitHubInboundContext,
+  issueNumber: number,
+): Promise<boolean> => {
+  try {
+    const added = await ctx.github.request({
+      method: "POST",
+      path: `/repos/${ctx.repository.owner}/${ctx.repository.name}/issues/${issueNumber}/labels`,
+      body: { labels: [FACTORY_RUNNING_LABEL] },
+    });
+    if (!added.ok) return false;
+    for (const label of [FACTORY_PROMOTED_LABEL, FACTORY_QUEUED_LABEL]) {
+      const removed = await ctx.github.request({
+        method: "DELETE",
+        path: `/repos/${ctx.repository.owner}/${ctx.repository.name}/issues/${issueNumber}/labels/${encodeURIComponent(label)}`,
+      });
+      if (!removed.ok && removed.status !== 404) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 /**
  * Task injected into an unattended intake session (an issue labeled with the
  * factory label). The issue's content is already in the session's context
  * when this runs.
  */
 const FACTORY_INTAKE_TASK = [
-  `This issue was handed to the factory with the "${FACTORY_LABEL}" label, and this run is unattended: nobody is watching to answer a question or approve an action, so never use ask_question and never attempt an action that needs approval.`,
-  "Run the work item through the full pipeline. If the classifier needs clarification, post its questions as a comment on the issue and stop; someone will re-label the issue when they've answered.",
-  "Keep the requester in the loop as you go: post a short comment on this issue when a station completes, except the last one. Comments on this issue are the one conversational write this run has; you cannot comment anywhere else.",
-  "Deliver the finished work as a draft pull request. The message you end the run with appears on this issue for you: link the pull request there, and let it stand in for the progress comment for this final step.",
+  `This issue was explicitly promoted with the "${FACTORY_PROMOTED_LABEL}" label after human queue review. This run is unattended: never use ask_question and never attempt an action that needs approval.`,
+  `The issue must already have "${FACTORY_QUEUED_LABEL}" and "${WAYFINDER_TASK_LABEL}". Run the full pipeline in order and deliver a draft pull request.`,
+  `Keep the requester in the loop with short comments on this issue only. When the run reaches a terminal outcome, apply exactly one of "${FACTORY_COMPLETED_LABEL}", "${FACTORY_FAILED_LABEL}", or "${FACTORY_MANUAL_LABEL}" and remove "${FACTORY_RUNNING_LABEL}".`,
+].join("\n\n");
+
+const FACTORY_CANDIDATE_TASK = [
+  `This is a deliberate intake pass for an issue labeled "${FACTORY_CANDIDATE_LABEL}". Do not implement code, delegate implementation stations, open a pull request, close the issue, or use ask_question.`,
+  `Inspect the issue and its repository context, classify it using the repository's existing labels, and use set_intake_state exactly once. Choose queued only when the issue has both "${WAYFINDER_TASK_LABEL}" and a concrete implementation request; otherwise choose needs_clarification, duplicate, or blocked.`,
+  `Post one concise comment on the issue explaining the classification. The set_intake_state tool is the only permitted factory-state transition; stop after it succeeds.`,
 ].join("\n\n");
 
 /**
@@ -267,7 +323,7 @@ export default githubChannel({
       return null;
     }
     return {
-      auth: stampGithubAutonomous(ctx, pullNumber),
+      auth: stampGithubAutonomous(ctx, pullNumber, "ci-fix", "ci_failure"),
       context: [CI_FIX_TASK],
     };
   },
@@ -290,7 +346,7 @@ export default githubChannel({
     } catch {
       // The reaction is observability only; invocation must not depend on it.
     }
-    return { auth: stampGithubTrusted(ctx) };
+    return { auth: stampGithubTrusted(ctx, "comment_mention") };
   },
   onIssue: async (ctx, issue) => {
     const invocationNames = await resolveInvocationNames().catch(() => null);
@@ -301,26 +357,59 @@ export default githubChannel({
       bodyMentionsAny(body.body, invocationNames) &&
       (await isAllowedTeamMember(ctx))
     ) {
-      return { auth: stampGithubTrusted(ctx) };
+      return { auth: stampGithubTrusted(ctx, "issue_body_mention") };
     }
 
-    const { labels } = issue.raw as {
-      labels?: ReadonlyArray<{ name?: unknown }>;
-    };
-    const hasFactoryLabel =
-      Array.isArray(labels) &&
-      labels.some((entry) => entry?.name === FACTORY_LABEL);
     if (
       issue.action !== "labeled" ||
-      !hasFactoryLabel ||
       !(await isAllowedTeamMember(ctx)) ||
       !(await isTrustedLabeler(ctx))
     ) {
       return null;
     }
+
+    const raw = issue.raw as {
+      label?: { name?: unknown };
+      labels?: ReadonlyArray<{ name?: unknown }>;
+    };
+    const appliedLabel = raw.label?.name;
+    const labels = new Set(
+      Array.isArray(raw.labels) ? raw.labels.map((entry) => entry?.name).filter((name): name is string => typeof name === "string") : [],
+    );
+    const target = repositoryTargetFromInbound(ctx);
+    if (appliedLabel === FACTORY_CANDIDATE_LABEL) {
+      const duplicate = await claimIntakeDelivery(target, {
+        deliveryId: ctx.delivery.id,
+        issueNumber: issue.issueNumber,
+        mode: "candidate",
+      });
+      if (duplicate) return null;
+      return {
+        auth: stampGithubAutonomous(ctx, issue.issueNumber, "intake", "candidate_admission"),
+        context: [FACTORY_CANDIDATE_TASK],
+        title: `Classify candidate #${issue.issueNumber}`,
+      };
+    }
+
+    const promotionLabel = appliedLabel === FACTORY_PROMOTED_LABEL;
+    if (
+      !promotionLabel ||
+      !labels.has(FACTORY_QUEUED_LABEL) ||
+      !labels.has(WAYFINDER_TASK_LABEL)
+    ) {
+      return null;
+    }
+    if (!(await markPromotedIssueRunning(ctx, issue.issueNumber))) return null;
+    const duplicate = await claimIntakeDelivery(target, {
+      deliveryId: ctx.delivery.id,
+      issueNumber: issue.issueNumber,
+      mode: "promoted",
+    });
+    if (duplicate) return null;
     return {
-      auth: stampGithubAutonomous(ctx, issue.issueNumber),
+      auth: stampGithubAutonomous(ctx, issue.issueNumber, "factory", "human_promotion"),
       context: [FACTORY_INTAKE_TASK],
+      title: `Implement promoted issue #${issue.issueNumber}`,
     };
   },
   onPullRequest: async (ctx, pullRequest) => {
@@ -335,10 +424,10 @@ export default githubChannel({
       BODY_MENTION_ACTIONS.has(pullRequest.action) &&
       bodyMentionsAny(body.body, invocationNames)
     ) {
-      return { auth: stampGithubTrusted(ctx) };
+      return { auth: stampGithubTrusted(ctx, "pull_request_body_mention") };
     }
     return pullRequest.action === "opened"
-      ? { auth: stampGithubTrusted(ctx), context: [PR_SUMMARY_TASK] }
+      ? { auth: stampGithubTrusted(ctx, "pull_request_summary"), context: [PR_SUMMARY_TASK] }
       : null;
   },
 });
