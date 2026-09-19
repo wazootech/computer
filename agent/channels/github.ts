@@ -171,22 +171,17 @@ const markPromotedIssueRunning = async (
   issueNumber: number,
   labels: readonly string[],
 ): Promise<boolean> => {
+  const plan = planIntakeStateTransition(labels, "running", true);
+  const nextLabels = labels
+    .filter((label) => !plan.remove.includes(label))
+    .concat(plan.add.filter((label) => !labels.includes(label)));
   try {
-    const plan = planIntakeStateTransition(labels, "running", true);
-    const added = await ctx.github.request({
-      method: "POST",
+    const response = await ctx.github.request({
+      method: "PUT",
       path: `/repos/${ctx.repository.owner}/${ctx.repository.name}/issues/${issueNumber}/labels`,
-      body: { labels: plan.add },
+      body: { labels: nextLabels },
     });
-    if (!added.ok) return false;
-    for (const label of plan.remove) {
-      const removed = await ctx.github.request({
-        method: "DELETE",
-        path: `/repos/${ctx.repository.owner}/${ctx.repository.name}/issues/${issueNumber}/labels/${encodeURIComponent(label)}`,
-      });
-      if (!removed.ok && removed.status !== 404) return false;
-    }
-    return true;
+    return response.ok;
   } catch {
     return false;
   }
@@ -409,13 +404,12 @@ export default githubChannel({
     });
     if (duplicate.duplicate) return null;
     try {
-      const marked = await markPromotedIssueRunning(ctx, issue.issueNumber, [...labels]);
-      if (!marked) {
+      if (!(await markPromotedIssueRunning(ctx, issue.issueNumber, [...labels]))) {
         await releaseIntakeDelivery(target, {
           deliveryId: ctx.delivery.id,
           issueNumber: issue.issueNumber,
           mode: "promoted",
-        }).catch(() => undefined);
+        });
         return null;
       }
     } catch (error) {
