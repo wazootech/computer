@@ -15,13 +15,7 @@ import { MODELS } from "../../lib/models.js";
  */
 export default defineAgent({
   description:
-    "Execute an approved implementation plan in a checkout of the factory repository: " +
-    "write the code on a feature branch, run the repository's own checks, commit, and " +
-    "push the branch. Returns the branch name, per-file change summary, verification " +
-    "results, and deviations. The caller passes the work item, classification, and full " +
-    "analysis in the message, plus an artifact id when the analyst saved its full detail " +
-    "as one; on a revision run it also passes the existing branch and the reviewer's " +
-    "findings.",
+    "Execute an approved implementation plan in a checkout of the factory repository, write code on a feature branch, run the repository checks, commit, and push the branch. Return the branch name, per-file change summary, verification results, and deviations. The caller passes the work item, classification, full analysis, and selected risk-scaled review policy, plus an artifact id when the analyst saved full detail. On revision runs it passes the existing branch and reviewer findings. Use the policy to plan verification depth and call out evidence gaps.",
   model: MODELS.implementer,
   outputSchema: {
     additionalProperties: false,

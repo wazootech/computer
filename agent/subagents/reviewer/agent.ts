@@ -16,11 +16,12 @@ import { MODELS } from "../../lib/models.js";
 export default defineAgent({
   description:
     "Independently review a pushed factory branch against the original work item and its " +
-    "acceptance criteria: fetch the branch, read the real diff, re-run cheap checks, and " +
-    "return approve, request_changes, or reject with specific findings. Never modifies " +
-    "code. The caller passes the work item, the analysis with acceptance criteria, the " +
-    "branch name, and the implementer's report in the message, plus an artifact id when " +
-    "the analyst saved its full detail as one.",
+    "acceptance criteria: fetch the branch, read the real diff, re-run the checks required " +
+    "by the supplied risk-scaled review policy, and return approve, request_changes, or " +
+    "reject with specific findings. Never modifies code. The caller passes the work item, " +
+    "the analysis with acceptance criteria, the branch name, the implementer's report, and " +
+    "the selected review policy in the message, plus an artifact id when the analyst saved " +
+    "its full detail as one.",
   model: MODELS.reviewer,
   outputSchema: {
     additionalProperties: false,
@@ -53,6 +54,30 @@ export default defineAgent({
         },
         type: "array",
       },
+      depth_assessment: {
+        additionalProperties: false,
+        description:
+          "The final review-depth assessment after inspecting the actual diff. Upgrade the caller's policy when changed paths reveal greater risk.",
+        properties: {
+          depth: { enum: ["light", "standard", "deep"], type: "string" },
+          human_escalation: { type: "boolean" },
+          rationale: { type: "string" },
+          risk_factors: { items: { type: "string" }, type: "array" },
+        },
+        required: ["depth", "risk_factors", "rationale", "human_escalation"],
+        type: "object",
+      },
+      evidence_collected: {
+        description:
+          "Evidence collected at the selected depth: probes, affected files, commands, results, and any gaps.",
+        items: { type: "string" },
+        type: "array",
+      },
+      required_checks: {
+        description: "Checks required by the selected depth and whether each was completed.",
+        items: { type: "string" },
+        type: "array",
+      },
       suggestions: {
         description: "Advisory notes that do not block shipping.",
         items: { type: "string" },
@@ -69,6 +94,9 @@ export default defineAgent({
     },
     required: [
       "verdict",
+      "depth_assessment",
+      "required_checks",
+      "evidence_collected",
       "criteria_results",
       "blocking_findings",
       "suggestions",
