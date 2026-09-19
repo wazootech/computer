@@ -1,11 +1,21 @@
 import { defineEval } from "eve/evals";
 import { calledInOrder, STATIONS } from "../helpers.js";
 
+const liveAcceptanceConfigured = (): boolean =>
+  process.env.EVE_LIVE_ACCEPTANCE_CONFIRM === "1" &&
+  process.env.EVE_LIVE_ACCEPTANCE_TARGET === "wazootech/wazoo-console" &&
+  process.env.EVE_LIVE_ACCEPTANCE_ISSUE === "84" &&
+  process.env.EVE_LIVE_ACCEPTANCE_DISPOSABLE === "1" &&
+  /^[0-9a-f]{40}$/iu.test(process.env.EVE_LIVE_ACCEPTANCE_BASE_SHA ?? "");
+
 export default defineEval({
   description:
     "A small real work item runs the whole line: all four stations fire in order and the final report names the branch or draft pull request that was delivered. Opt-in: this pushes a real branch to the event repository, so run it deliberately against a scratch repository (pnpm eval pipeline/full-pipeline).",
   tags: ["slow", "needs-connect", "pipeline"],
   async test(t) {
+    if (!liveAcceptanceConfigured()) {
+      t.skip("live pipeline acceptance requires explicit disposable wazootech/wazoo-console#84 confirmation and a full base SHA");
+    }
     await t.send(
       "Work item: add a short 'Reporting bugs' section to the README that asks reporters to include their version and reproduction steps. Run the full pipeline and deliver the result."
     );

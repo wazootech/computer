@@ -1,0 +1,131 @@
+import { defineDynamic, defineTool } from "eve/tools";
+import { z } from "zod";
+import {
+  FACTORY_BLOCKED_LABEL,
+  FACTORY_CANDIDATE_LABEL,
+  FACTORY_DUPLICATE_LABEL,
+  FACTORY_NEEDS_CLARIFICATION_LABEL,
+  FACTORY_QUEUED_LABEL,
+  FACTORY_STATE_LABELS,
+  INTAKE_CLASSIFICATION_LABELS,
+  WAYFINDER_TASK_LABEL,
+} from "#lib/constants.js";
+import { appendRunHistoryEvent } from "#lib/run-history.js";
+import { mintInstallationToken } from "#lib/github/app-token.js";
+import { repositoryTargetFromAuth } from "#lib/github/repository-target.js";
+import { intakeIssueNumber, isIntakeRun } from "#lib/trust.js";
+
+const githubApiVersion = "2022-11-28";
+const states = {
+  blocked: FACTORY_BLOCKED_LABEL,
+  duplicate: FACTORY_DUPLICATE_LABEL,
+  needs_clarification: FACTORY_NEEDS_CLARIFICATION_LABEL,
+  queued: FACTORY_QUEUED_LABEL,
+} as const;
+
+type IntakeState = keyof typeof states;
+type IssueResponse = { labels?: Array<{ name?: unknown }> };
+
+async function githubFetch(target: { owner: string; name: string }, path: string, init: RequestInit = {}) {
+  const token = await mintInstallationToken();
+  const headers = new Headers(init.headers);
+  headers.set("Accept", "application/vnd.github+json");
+  headers.set("Authorization", `Bearer ${token}`);
+  headers.set("X-GitHub-Api-Version", githubApiVersion);
+  if (init.body !== undefined) headers.set("Content-Type", "application/json");
+  const response = await fetch(`https://api.github.com/repos/${target.owner}/${target.name}${path}`, {
+    ...init,
+    headers,
+  });
+  if (!response.ok) throw new Error(`GitHub intake state request failed with HTTP ${response.status}`);
+  return response;
+}
+
+async function readIssue(target: { owner: string; name: string }, issueNumber: number): Promise<Set<string>> {
+  const response = await githubFetch(target, `/issues/${issueNumber}`);
+  const body = (await response.json()) as IssueResponse;
+  return new Set((body.labels ?? []).flatMap((label) => typeof label.name === "string" ? [label.name] : []));
+}
+
+async function addLabels(target: { owner: string; name: string }, issueNumber: number, labels: string[]) {
+  if (labels.length === 0) return;
+  await githubFetch(target, `/issues/${issueNumber}/labels`, {
+    method: "POST",
+    body: JSON.stringify({ labels }),
+  });
+}
+
+async function removeLabel(target: { owner: string; name: string }, issueNumber: number, label: string) {
+  await githubFetch(target, `/issues/${issueNumber}/labels/${encodeURIComponent(label)}`, { method: "DELETE" });
+}
+
+const tool = defineTool({
+  description: "Record a validated intake classification and transition the originating issue to queued, needs_clarification, duplicate, or blocked. This is the only tool that may change factory intake state.",
+  inputSchema: z.object({
+    classificationLabels: z.array(z.string()).max(4).default([]),
+    duplicateOf: z.number().int().positive().optional(),
+    questions: z.array(z.string().min(1).max(500)).max(8).default([]),
+    state: z.enum(["blocked", "duplicate", "needs_clarification", "queued"]),
+    summary: z.string().min(1).max(2_000),
+  }),
+  outputSchema: z.object({ issueNumber: z.number(), labels: z.array(z.string()), state: z.string(), duplicate: z.boolean() }),
+  async execute(input, ctx) {
+    const auth = ctx.session.auth.current;
+    if (auth === null || !isIntakeRun(auth)) throw new Error("set_intake_state is available only during candidate intake.");
+    const issueNumber = intakeIssueNumber(auth);
+    const deliveryId = typeof auth.attributes.intakeDeliveryId === "string" ? auth.attributes.intakeDeliveryId : undefined;
+    const target = repositoryTargetFromAuth(ctx.session.auth);
+    if (!target || issueNumber === null) throw new Error("The intake session has no verified issue target.");
+    if (input.state === "duplicate" && input.duplicateOf === undefined) throw new Error("A duplicate decision must name the canonical issue.");
+    if (input.state === "needs_clarification" && input.questions.length === 0) throw new Error("A clarification decision must include questions.");
+    if (input.state === "queued" && input.questions.length > 0) throw new Error("A queued decision cannot include clarification questions.");
+    if (input.classificationLabels.some((label) => !INTAKE_CLASSIFICATION_LABELS.includes(label as (typeof INTAKE_CLASSIFICATION_LABELS)[number]))) {
+      throw new Error("The classification contains a label outside the configured repository vocabulary.");
+    }
+    const labels = await readIssue(target, issueNumber);
+    const currentState = FACTORY_STATE_LABELS.find((label) => labels.has(label));
+    if (currentState === states[input.state]) {
+      return { duplicate: true, issueNumber, labels: [...labels].sort(), state: input.state };
+    }
+    if (currentState !== undefined && currentState !== FACTORY_CANDIDATE_LABEL && currentState !== FACTORY_NEEDS_CLARIFICATION_LABEL) {
+      throw new Error(`The issue is already in terminal or promoted factory state: ${currentState}`);
+    }
+    if (input.state === "queued" && !labels.has(WAYFINDER_TASK_LABEL)) {
+      throw new Error(`Queued intake requires the ${WAYFINDER_TASK_LABEL} label.`);
+    }
+    const nextLabel = states[input.state];
+    for (const label of FACTORY_STATE_LABELS) {
+      if (labels.has(label) && label !== nextLabel) await removeLabel(target, issueNumber, label);
+    }
+    await addLabels(target, issueNumber, [...input.classificationLabels, nextLabel]);
+    const deliveryAttribute = auth.attributes["intakeDeliveryId"];
+    const deliveryId2 = typeof deliveryAttribute === "string" ? deliveryAttribute : ctx.session.id;
+    await appendRunHistoryEvent({
+      data: {
+        classificationLabels: input.classificationLabels,
+        duplicateOf: input.duplicateOf,
+        questions: input.questions,
+        state: input.state,
+      },
+      idempotencyKey: `intake-decision:${deliveryId ?? ctx.session.id}:${input.state}`,
+      kind: "intake.decision",
+      runId: ctx.session.id,
+      source: {
+        channel: "github",
+        deliveryId: deliveryId,
+        issueNumber,
+        type: "intake",
+      },
+      status: input.state === "queued" ? "waiting" : input.state === "needs_clarification" ? "waiting" : "manual",
+      summary: input.summary,
+    }, target);
+    return { duplicate: false, issueNumber, labels: [...labels, ...input.classificationLabels, nextLabel].filter((label, index, all) => all.indexOf(label) === index).sort(), state: input.state };
+  },
+});
+
+export default defineDynamic({
+  events: {
+    "session.started": (_event, ctx) => isIntakeRun(ctx.session.auth.current) ? tool : null,
+    "turn.started": (_event, ctx) => isIntakeRun(ctx.session.auth.current) ? tool : null,
+  },
+});

@@ -36,7 +36,7 @@ function githubApprovalRequest(ctx: ApprovalContext): ApprovalStatus {
     case "removeLabel":
       return labelPolicy(ctx);
     case "closeIssue":
-      return closeIssuePolicy();
+      return closeIssuePolicy(ctx);
     case "createPullRequest":
       return createPullRequestPolicy(ctx);
     case "updateIssue":
