@@ -1,12 +1,15 @@
 import type { Approval, ApprovalContext, ApprovalPolicy, ApprovalStatus } from "eve/tools/approval";
 import {
+  FACTORY_RUNNING_LABEL,
   FACTORY_STATE_LABELS,
+  FACTORY_TERMINAL_LABELS,
   INTAKE_CLASSIFICATION_LABELS,
 } from "../constants.js";
 import { teamApprovalResponse } from "./team-approval.js";
 import {
   intakeIssueNumber,
   isAutonomous,
+  isFactoryRun,
   isIntakeRun,
   isScheduleAppAuth,
   isTrusted,
@@ -50,6 +53,14 @@ export function labelPolicy(ctx: ApprovalContext): ApprovalStatus {
     ...(Array.isArray(input.labels) ? input.labels.filter((label): label is string => typeof label === "string") : []),
     ...(typeof input.label === "string" ? [input.label] : []),
   ];
+  if (isFactoryRun(auth)) {
+    const intakeIssue = intakeIssueNumber(auth);
+    if (input.issueNumber !== intakeIssue) return denied("Factory runs may change terminal state only on their originating issue.");
+    const adding = Array.isArray(input.labels);
+    if (adding && labels.length === 1 && FACTORY_TERMINAL_LABELS.includes(labels[0] as (typeof FACTORY_TERMINAL_LABELS)[number])) return "not-applicable";
+    if (!adding && labels.length === 1 && labels[0] === FACTORY_RUNNING_LABEL) return "not-applicable";
+    return denied("Factory runs may only add one terminal state label or remove factory:running on their originating issue.");
+  }
   if (isAutonomous(auth) && labels.some((label) => FACTORY_STATE_LABELS.includes(label as (typeof FACTORY_STATE_LABELS)[number]))) {
     return denied("Factory state labels can only be changed by the intake state transition tool.");
   }

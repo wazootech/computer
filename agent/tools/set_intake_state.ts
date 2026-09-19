@@ -6,7 +6,10 @@ import { mintInstallationToken } from "#lib/github/app-token.js";
 import { repositoryTargetFromAuth } from "#lib/github/repository-target.js";
 import {
   isAllowedIntakeClassificationLabel,
+  intakeStateForLabels,
+  labelForIntakeState,
   planIntakeStateTransition,
+  stateLabelsForTransition,
   type IntakeState,
 } from "#lib/intake-policy.js";
 import { intakeIssueNumber, isIntakeRun } from "#lib/trust.js";
@@ -71,24 +74,25 @@ const tool = defineTool({
       throw new Error("The classification contains a label outside the configured repository vocabulary.");
     }
     const labels = await readIssue(target, issueNumber);
-    if (!labels.has(FACTORY_CANDIDATE_LABEL)) throw new Error("Intake decisions require the originating issue to remain factory:candidate.");
-    const plan = planIntakeStateTransition([...labels], input.state as IntakeState, labels.has(WAYFINDER_TASK_LABEL));
-    if (plan.duplicate) {
-      return { duplicate: true, issueNumber, labels: [...labels].sort(), state: input.state };
+    const decisionClaim = await claimIntakeDecision(target, ctx.session.id, { issueNumber, state: input.state });
+    const currentState = intakeStateForLabels([...labels]);
+    let plan: { duplicate: boolean; add: string[]; remove: string[] };
+    if (currentState === null && decisionClaim.duplicate && decisionClaim.state === input.state) {
+      const fallback = stateLabelsForTransition([...labels], input.state as IntakeState);
+      plan = { duplicate: false, ...fallback };
+    } else {
+      plan = planIntakeStateTransition([...labels], input.state as IntakeState, labels.has(WAYFINDER_TASK_LABEL));
     }
-    const decisionClaim = await claimIntakeDecision(target, ctx.session.id);
-    if (decisionClaim.duplicate) return { duplicate: true, issueNumber, labels: [...labels].sort(), state: input.state };
-    for (const label of plan.remove) await removeLabel(target, issueNumber, label);
-    await addLabels(target, issueNumber, [...input.classificationLabels, ...plan.add]);
-    await appendRunHistoryEvent({
+    const plannedEvent = {
       data: {
+        applied: false,
         classificationLabels: input.classificationLabels,
         duplicateOf: input.duplicateOf,
         questions: input.questions,
         state: input.state,
       },
-      idempotencyKey: `intake-decision:${deliveryId ?? ctx.session.id}:${input.state}`,
-      kind: "intake.decision",
+      idempotencyKey: `intake-decision:${deliveryId ?? ctx.session.id}:${input.state}:planned`,
+      kind: "intake.decision" as const,
       runId: ctx.session.id,
       source: {
         channel: "github",
@@ -96,10 +100,20 @@ const tool = defineTool({
         issueNumber,
         type: "intake",
       },
-      status: input.state === "queued" ? "waiting" : input.state === "needs_clarification" ? "waiting" : "manual",
+      status: input.state === "queued" ? "waiting" as const : input.state === "needs_clarification" ? "waiting" as const : "manual" as const,
       summary: input.summary,
-    }, target);
-    return { duplicate: false, issueNumber, labels: [...labels, ...input.classificationLabels, ...plan.add].filter((label, index, all) => all.indexOf(label) === index).sort(), state: input.state };
+    };
+    await appendRunHistoryEvent(plannedEvent, target);
+    if (plan.duplicate) {
+      await appendRunHistoryEvent({ ...plannedEvent, data: { ...plannedEvent.data, applied: true }, idempotencyKey: `intake-decision:${deliveryId ?? ctx.session.id}:${input.state}:applied` }, target);
+      return { duplicate: true, issueNumber, labels: [...labels].sort(), state: input.state };
+    }
+    await addLabels(target, issueNumber, [...input.classificationLabels, ...plan.add]);
+    for (const label of plan.remove) await removeLabel(target, issueNumber, label);
+    const after = await readIssue(target, issueNumber);
+    if (intakeStateForLabels([...after]) !== input.state) throw new Error("Intake state transition could not be confirmed; retry the decision.");
+    await appendRunHistoryEvent({ ...plannedEvent, data: { ...plannedEvent.data, applied: true }, idempotencyKey: `intake-decision:${deliveryId ?? ctx.session.id}:${input.state}:applied` }, target);
+    return { duplicate: false, issueNumber, labels: [...after].sort(), state: input.state };
   },
 });
 

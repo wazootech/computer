@@ -25,7 +25,7 @@ async function main(): Promise<void> {
     repository: required("repository"),
     worktree: required("worktree"),
   };
-  const evidence = runRepeatabilityReplay(target);
+  const evidence = await runRepeatabilityReplay(target);
   const outputDirectory = option("output") ?? ".eve/acceptance-repeatability";
   const outputPath = join(outputDirectory, `${new Date().toISOString().replaceAll(/[:.]/gu, "-")}.json`);
   try {

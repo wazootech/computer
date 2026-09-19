@@ -38,14 +38,23 @@ export const FACTORY_TERMINAL_LABELS = [
 export const INTAKE_CLASSIFICATION_LABELS = (process.env.FACTORY_INTAKE_ALLOWED_LABELS ??
   "bug,documentation,enhancement,good first issue,help wanted,question,wayfinder:task").split(",").map((label) => label.trim()).filter(Boolean);
 
-export function validateFactoryLabelConfiguration(): string[] {
+export function validateFactoryLabelConfiguration(environment: Record<string, string | undefined> = process.env): string[] {
+  const candidate = environment.FACTORY_CANDIDATE_LABEL?.trim() || FACTORY_CANDIDATE_LABEL;
+  const promoted = environment.FACTORY_PROMOTED_LABEL?.trim() || FACTORY_PROMOTED_LABEL;
+  const terminal = [
+    environment.FACTORY_DUPLICATE_LABEL?.trim() || FACTORY_DUPLICATE_LABEL,
+    environment.FACTORY_BLOCKED_LABEL?.trim() || FACTORY_BLOCKED_LABEL,
+    environment.FACTORY_FAILED_LABEL?.trim() || FACTORY_FAILED_LABEL,
+    environment.FACTORY_MANUAL_LABEL?.trim() || FACTORY_MANUAL_LABEL,
+    environment.FACTORY_COMPLETED_LABEL?.trim() || FACTORY_COMPLETED_LABEL,
+  ];
+  const labels = [candidate, environment.FACTORY_QUEUED_LABEL?.trim() || FACTORY_QUEUED_LABEL, environment.FACTORY_NEEDS_CLARIFICATION_LABEL?.trim() || FACTORY_NEEDS_CLARIFICATION_LABEL, ...terminal, promoted];
   const errors: string[] = [];
-  const labels = FACTORY_STATE_LABELS.map((label) => label.trim());
   if (labels.some((label) => label.length === 0)) errors.push("factory state labels must be non-empty");
   if (new Set(labels).size !== labels.length) errors.push("factory state labels must be unique");
-  if (FACTORY_CANDIDATE_LABEL === FACTORY_PROMOTED_LABEL) errors.push("candidate and promotion labels must differ");
-  if (FACTORY_TERMINAL_LABELS.includes(FACTORY_CANDIDATE_LABEL)) errors.push("candidate label cannot be terminal");
-  if (FACTORY_TERMINAL_LABELS.includes(FACTORY_PROMOTED_LABEL)) errors.push("promotion label cannot be terminal");
+  if (candidate === promoted) errors.push("candidate and promotion labels must differ");
+  if (terminal.includes(candidate)) errors.push("candidate label cannot be terminal");
+  if (terminal.includes(promoted)) errors.push("promotion label cannot be terminal");
   return errors;
 }
 

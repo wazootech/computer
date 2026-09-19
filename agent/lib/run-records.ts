@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { readDocument } from "./blob.js";
 import { RUN_RECORDS_PREFIX } from "./blob.js";
-import { appendRunHistoryEvent, readRunHistory, runHistoryRecordPath, startRunHistory, assertValidRunId } from "./run-history.js";
+import { appendRunHistoryEvent, readRunHistory, runHistoryRecordPath, startRunHistory, assertValidRunId, RUN_ID_PATTERN } from "./run-history.js";
 import { repositoryScopeKey, type RepositoryTarget } from "./github/repository-target.js";
 
 export type RunEvent = {
@@ -61,4 +61,4 @@ export async function appendRunEvent(runId: string, event: RunEvent, target: Rep
   return { path: result.path, duplicate: result.duplicate };
 }
 
-export { readRunHistory } from "./run-history.js";
+export { RUN_ID_PATTERN, readRunHistory } from "./run-history.js";

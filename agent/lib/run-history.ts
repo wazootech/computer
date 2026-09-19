@@ -90,7 +90,7 @@ export type RunHistorySummary = Readonly<{
   startedAt: string;
   updatedAt: string;
   endedAt?: string;
-  retentionExpiresAt: string;
+  retentionExpiresAt?: string;
   eventCount: number;
   lastEventId: string;
   lastSequence: string;
@@ -104,7 +104,7 @@ export type RunHistoryRecord = Readonly<{
 
 export interface RunHistoryStore {
   append(input: AppendRunHistoryInput, target: RepositoryTarget): Promise<{ duplicate: boolean; eventId: string; path: string; runId: string }>;
-  read(target: RepositoryTarget, runId: string): Promise<{ found: true; path: string; record: RunHistoryRecord } | { found: false; path: string }>;
+  read(target: RepositoryTarget, runId: string): Promise<{ found: true; path: string; record: RunHistoryRecord } | { found: false; path: string; reason?: "missing" | "expired" }>;
   list(target: RepositoryTarget, options?: RunHistoryListOptions): Promise<readonly RunHistorySummary[]>;
   remove(target: RepositoryTarget, runId: string): Promise<{ deleted: boolean; count: number }>;
 }
@@ -115,6 +115,7 @@ export type RunHistoryListOptions = {
   issueNumber?: number;
   pullRequestNumber?: number;
   deliveryId?: string;
+  includeExpired?: boolean;
 };
 
 export type AppendRunHistoryInput = Readonly<{
@@ -156,6 +157,34 @@ const stableEventId = (runId: string, idempotencyKey: string): string =>
   `evt-${createHash("sha256").update(`${runId}:${idempotencyKey}`).digest("hex").slice(0, 32)}`;
 
 const nowIso = (): string => new Date().toISOString();
+
+function byteLength(value: string): number {
+  return Buffer.byteLength(value, "utf8");
+}
+
+function boundedEventData(base: Omit<RunHistoryEvent, "data">, value: unknown): unknown {
+  const redacted = redact(value);
+  const fits = (data: unknown): boolean => byteLength(JSON.stringify({ ...base, data })) <= MAX_EVENT_BYTES;
+  if (fits(redacted)) return redacted;
+  const serialized = JSON.stringify(redacted);
+  const codePoints = Array.from(serialized);
+  const originalBytes = byteLength(serialized);
+  let low = 0;
+  let high = codePoints.length;
+  let best = "";
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const content = codePoints.slice(0, middle).join("");
+    const candidate = { truncated: true, originalBytes, content };
+    if (fits(candidate)) {
+      best = content;
+      low = middle + 1;
+    } else {
+      high = middle - 1;
+    }
+  }
+  return { truncated: true, originalBytes, content: best };
+}
 
 const retentionExpiry = (occurredAt: string): string =>
   new Date(Date.parse(occurredAt) + RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
@@ -248,25 +277,28 @@ async function persistRunSummary(target: RepositoryTarget, runId: string): Promi
 }
 
 export async function appendRunHistoryEvent(input: AppendRunHistoryInput, target: RepositoryTarget) {
-  const rootRunId = input.rootRunId ?? input.runId;
-  const eventId = stableEventId(input.runId, input.idempotencyKey);
+  const runId = assertValidRunId(input.runId);
+  const rootRunId = assertValidRunId(input.rootRunId ?? runId);
+  const parentRunId = input.parentRunId === undefined ? undefined : assertValidRunId(input.parentRunId);
+  const childRunId = input.childRunId === undefined ? undefined : assertValidRunId(input.childRunId);
+  const eventId = stableEventId(runId, input.idempotencyKey);
   const occurredAt = input.occurredAt ?? nowIso();
   const ingestedAt = nowIso();
   const retentionExpiresAt = retentionExpiry(occurredAt);
-  const event: RunHistoryEvent = {
+  let event: RunHistoryEvent = {
     data: input.data === undefined ? undefined : redact(input.data),
     eventId,
     idempotencyKey: redactString(input.idempotencyKey),
     kind: input.kind,
     occurredAt,
-    parentRunId: input.parentRunId,
-    childRunId: input.childRunId,
+    parentRunId,
+    childRunId,
     recordType: "run-event",
     repository: target,
     repositoryFullName: target.fullName,
     repositoryId: target.id,
     rootRunId,
-    runId: input.runId,
+    runId,
     schemaVersion: RUN_HISTORY_SCHEMA_VERSION,
     sequence: input.sequence ?? `${occurredAt}:${eventId}`,
     source: summarizeSource(input.source),
@@ -277,14 +309,18 @@ export async function appendRunHistoryEvent(input: AppendRunHistoryInput, target
     ingestedAt,
     retentionExpiresAt,
   };
-  const path = eventPath(target, input.runId, eventId);
+  if (byteLength(JSON.stringify(event)) > MAX_EVENT_BYTES) {
+    const { data, ...base } = event;
+    event = { ...event, data: boundedEventData(base, data) };
+  }
+  const path = eventPath(target, runId, eventId);
   const duplicate = await putImmutable(path, event);
   try {
-    await persistRunSummary(target, input.runId);
+    await persistRunSummary(target, runId);
   } catch (error) {
     console.error("run history summary projection failed", error instanceof Error ? error.message : "unknown error");
   }
-  return { duplicate, eventId, path, runId: input.runId };
+  return { duplicate, eventId, path, runId };
 }
 
 export async function startRunHistory(
@@ -301,28 +337,36 @@ export async function startRunHistory(
   }, target);
 }
 
-export async function readRunHistory(target: RepositoryTarget, runId: string): Promise<{ found: true; path: string; record: RunHistoryRecord } | { found: false; path: string }> {
-  const prefix = runPrefix(target, runId);
+export async function readRunHistory(target: RepositoryTarget, runId: string): Promise<{ found: true; path: string; record: RunHistoryRecord } | { found: false; path: string; reason?: "missing" | "expired" }> {
+  const validatedRunId = assertValidRunId(runId);
+  const prefix = runPrefix(target, validatedRunId);
+  const tombstone = await readJson<{ reason?: string }>(`${prefix}tombstone.json`);
+  if (tombstone) return { found: false, path: runHistoryRecordPath(target, validatedRunId), reason: "expired" };
   const blobs = await listAll(`${prefix}events/`);
-  if (blobs.length === 0) return { found: false, path: runHistoryRecordPath(target, runId) };
+  if (blobs.length === 0) return { found: false, path: runHistoryRecordPath(target, validatedRunId), reason: "missing" };
   const events = (await Promise.all(blobs.map(({ pathname }) => readJson<RunHistoryEvent>(pathname))))
     .filter((event): event is RunHistoryEvent => event !== null)
     .sort((a, b) => a.sequence.localeCompare(b.sequence) || a.occurredAt.localeCompare(b.occurredAt) || a.eventId.localeCompare(b.eventId));
-  if (events.length === 0) return { found: false, path: runHistoryRecordPath(target, runId) };
+  if (events.length === 0) return { found: false, path: runHistoryRecordPath(target, validatedRunId), reason: "missing" };
   const first = events[0];
   const last = events[events.length - 1];
-  if (!first || !last) return { found: false, path: runHistoryRecordPath(target, runId) };
+  if (!first || !last) return { found: false, path: runHistoryRecordPath(target, validatedRunId), reason: "missing" };
+  const terminalEvent = events.find((event, index) => {
+    const prior = index === 0 ? "running" as RunHistoryStatus : statusForKind(events[index - 1]?.kind ?? "run.started", events[index - 1]?.status ?? "running");
+    return ["completed", "failed", "cancelled", "manual"].includes(statusForKind(event.kind, event.status ?? prior));
+  });
+  const endedAt = terminalEvent?.occurredAt;
+  const retentionExpiresAt = endedAt ? retentionExpiry(endedAt) : undefined;
   const status = events.reduce((current, event) => statusForKind(event.kind, event.status ?? current), "running" as RunHistoryStatus);
-  const terminal = ["completed", "failed", "cancelled", "manual"].includes(status);
   const summary: RunHistorySummary = {
-    endedAt: terminal ? last.occurredAt : undefined,
+    endedAt: terminalEvent?.occurredAt,
     eventCount: events.length,
     lastEventId: last.eventId,
     lastSequence: last.sequence,
     parentRunId: first.parentRunId,
     repository: first.repository,
     rootRunId: first.rootRunId,
-    runId,
+    runId: validatedRunId,
     schemaVersion: RUN_HISTORY_SCHEMA_VERSION,
     source: first.source,
     startedAt: first.occurredAt,
@@ -332,13 +376,12 @@ export async function readRunHistory(target: RepositoryTarget, runId: string): P
     tenantScope: repositoryScopeKey(target),
     repositoryId: target.id,
     repositoryFullName: target.fullName,
-    retentionExpiresAt: retentionExpiry(first.occurredAt),
+    retentionExpiresAt,
   };
-  if (Date.parse(summary.retentionExpiresAt) <= Date.now()) {
-    void deleteRunHistory(target, runId).catch(() => undefined);
-    return { found: false, path: runHistoryRecordPath(target, runId) };
+  if (retentionExpiresAt && Date.parse(retentionExpiresAt) <= Date.now()) {
+    return { found: false, path: runHistoryRecordPath(target, validatedRunId), reason: "expired" };
   }
-  return { found: true, path: runHistoryRecordPath(target, runId), record: { events, summary } };
+  return { found: true, path: runHistoryRecordPath(target, validatedRunId), record: { events, summary } };
 }
 
 export async function listRunHistory(target: RepositoryTarget, options: RunHistoryListOptions = {}) {
@@ -347,10 +390,7 @@ export async function listRunHistory(target: RepositoryTarget, options: RunHisto
   for (const { pathname } of blobs) {
     const summary = await readJson<RunHistorySummary>(pathname);
     if (!summary) continue;
-    if (Date.parse(summary.retentionExpiresAt) <= Date.now()) {
-      void deleteRunHistory(target, summary.runId).catch(() => undefined);
-      continue;
-    }
+    if (summary.retentionExpiresAt && Date.parse(summary.retentionExpiresAt) <= Date.now() && !options.includeExpired) continue;
     if (
       (!options.status || summary.status === options.status) &&
       (!options.issueNumber || summary.source?.issueNumber === options.issueNumber) &&
@@ -363,12 +403,26 @@ export async function listRunHistory(target: RepositoryTarget, options: RunHisto
 }
 
 export async function deleteRunHistory(target: RepositoryTarget, runId: string) {
-  const blobs = await listAll(runPrefix(target, runId));
+  const validatedRunId = assertValidRunId(runId);
+  const blobs = await listAll(runPrefix(target, validatedRunId));
   await Promise.all([
     ...blobs.map(({ pathname }) => del(pathname)),
-    del(runHistoryIndexPath(target, runId)),
+    del(runHistoryIndexPath(target, validatedRunId)),
   ]);
+  await put(`${runPrefix(target, validatedRunId)}tombstone.json`, JSON.stringify({ deletedAt: nowIso(), reason: "expired", runId: validatedRunId }), { access: "private", addRandomSuffix: false, allowOverwrite: true, contentType: "application/json" });
   return { deleted: blobs.length > 0, count: blobs.length };
+}
+
+export async function cleanupExpiredRunHistory(target: RepositoryTarget): Promise<number> {
+  const summaries = await listRunHistory(target, { includeExpired: true, limit: 100 });
+  let deleted = 0;
+  for (const summary of summaries) {
+    if (summary.retentionExpiresAt && Date.parse(summary.retentionExpiresAt) <= Date.now()) {
+      await deleteRunHistory(target, summary.runId);
+      deleted += 1;
+    }
+  }
+  return deleted;
 }
 
 export async function claimIntakeDelivery(
@@ -390,14 +444,19 @@ export async function claimIntakeDelivery(
 export async function claimIntakeDecision(
   target: RepositoryTarget,
   runId: string,
-): Promise<{ duplicate: boolean; path: string }> {
-  const path = `${RUN_HISTORY_PREFIX}${repositoryScopeKey(target)}/intake/decisions/${segment(assertValidRunId(runId))}.json`;
-  const duplicate = await putImmutable(path, {
+  input: { issueNumber: number; state: string },
+): Promise<{ duplicate: boolean; path: string; issueNumber: number; state: string }> {
+  const validatedRunId = assertValidRunId(runId);
+  const path = `${RUN_HISTORY_PREFIX}${repositoryScopeKey(target)}/intake/decisions/${segment(validatedRunId)}.json`;
+  const claim = {
     claimedAt: nowIso(),
-    runId: assertValidRunId(runId),
+    issueNumber: input.issueNumber,
+    runId: validatedRunId,
     schemaVersion: RUN_HISTORY_SCHEMA_VERSION,
-  });
-  return { duplicate, path };
+    state: input.state,
+  };
+  const duplicate = await putImmutable(path, claim);
+  return { duplicate, issueNumber: input.issueNumber, path, state: input.state };
 }
 
 export async function releaseIntakeDelivery(

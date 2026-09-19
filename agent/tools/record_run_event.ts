@@ -2,6 +2,7 @@ import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { appendRunEvent } from "#lib/run-records.js";
 import { repositoryTargetFromAuth } from "#lib/github/repository-target.js";
+import { RUN_ID_PATTERN } from "#lib/run-history.js";
 
 const usage = z.object({
   inputTokens: z.number().int().nonnegative().optional(),
@@ -17,7 +18,7 @@ export default defineTool({
     idempotencyKey: z.string().min(1).max(300).optional(),
     kind: z.enum(["stage", "approval", "output", "failure"]),
     output: z.unknown().optional(),
-    runId: z.string().min(1).max(160),
+    runId: z.string().regex(RUN_ID_PATTERN),
     stage: z.string().min(1).max(120),
     status: z.enum(["started", "completed", "pending", "approved", "rejected", "failed"]),
     summary: z.string().min(1).max(4000),

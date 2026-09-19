@@ -6,6 +6,7 @@ import {
   resolveDeepSeekModel,
   resolveDeepSeekThinking,
 } from "./deepseek.ts";
+import { validateFactoryLabelConfiguration } from "../agent/lib/constants.ts";
 
 const GITHUB_API_VERSION = "2022-11-28";
 
@@ -55,6 +56,10 @@ export type PreflightResult = {
     model: string;
     status: number | null;
     error?: string;
+  };
+  factoryLabels: {
+    ok: boolean;
+    errors: string[];
   };
 };
 
@@ -264,8 +269,10 @@ export async function runPreflight(
         model: resolveDeepSeekModel(env),
         status: null,
       };
-  const ok = githubApp.ok && deepSeek.ok && missingSecrets(secrets).length === 0;
-  return { ok, secrets, githubApp, deepSeek };
+  const factoryLabelErrors = validateFactoryLabelConfiguration(env);
+  const factoryLabels = { errors: factoryLabelErrors, ok: factoryLabelErrors.length === 0 };
+  const ok = githubApp.ok && deepSeek.ok && factoryLabels.ok && missingSecrets(secrets).length === 0;
+  return { ok, secrets, githubApp, deepSeek, factoryLabels };
 }
 
 export function summarizeSecrets(

@@ -156,3 +156,14 @@ test("validates an explicitly disposable acceptance target", () => {
   assert.equal(invalid.ok, false);
   assert.equal(invalid.errors.length, 5);
 });
+
+test("preflight rejects conflicting factory label configuration", async () => {
+  const result = await runPreflight({
+    FACTORY_APPROVAL_SECRET: "approval-secret",
+    FACTORY_CANDIDATE_LABEL: "same",
+    FACTORY_PROMOTED_LABEL: "same",
+  }, async () => { throw new Error("network should not be called"); }, { checkDeepSeek: false });
+  assert.equal(result.factoryLabels.ok, false);
+  assert.match(result.factoryLabels.errors.join(" "), /differ|unique/u);
+  assert.equal(result.ok, false);
+});

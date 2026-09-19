@@ -32,7 +32,7 @@ import {
   repositoryAttributes,
   repositoryTargetFromInbound,
 } from "../lib/github/repository-target.js";
-import { planIntakeStateTransition } from "../lib/intake-policy.js";
+import { intakeStateForLabels, planIntakeStateTransition } from "../lib/intake-policy.js";
 
 const githubCredentials = {
   appId: () => process.env.GITHUB_APP_ID ?? "",
@@ -169,21 +169,40 @@ const isTrustedLabeler = async (
 const markPromotedIssueRunning = async (
   ctx: GitHubInboundContext,
   issueNumber: number,
-  labels: readonly string[],
-): Promise<boolean> => {
-  const plan = planIntakeStateTransition(labels, "running", true);
-  const nextLabels = labels
-    .filter((label) => !plan.remove.includes(label))
-    .concat(plan.add.filter((label) => !labels.includes(label)));
+  _labels: readonly string[],
+): Promise<"success" | "invalid"> => {
+  const path = `/repos/${ctx.repository.owner}/${ctx.repository.name}/issues/${issueNumber}`;
+  const readLabels = async (): Promise<string[]> => {
+    const response = await ctx.github.request<{ labels?: Array<{ name?: unknown }> }>({ method: "GET", path });
+    if (!response.ok) throw new Error(`GitHub promotion read failed with HTTP ${response.status}`);
+    return (response.body.labels ?? []).flatMap((label) => typeof label.name === "string" ? [label.name] : []);
+  };
+
+  const freshLabels = await readLabels();
+  if (intakeStateForLabels(freshLabels) === "running") return "success";
+  let plan: ReturnType<typeof planIntakeStateTransition>;
   try {
-    const response = await ctx.github.request({
-      method: "PUT",
-      path: `/repos/${ctx.repository.owner}/${ctx.repository.name}/issues/${issueNumber}/labels`,
-      body: { labels: nextLabels },
-    });
-    return response.ok;
+    plan = planIntakeStateTransition(freshLabels, "running", freshLabels.includes(WAYFINDER_TASK_LABEL));
   } catch {
-    return false;
+    return "invalid";
+  }
+
+  try {
+    const addResponse = await ctx.github.request({ method: "POST", path: `${path}/labels`, body: { labels: plan.add } });
+    if (!addResponse.ok) throw new Error(`GitHub promotion add failed with HTTP ${addResponse.status}`);
+    for (const label of plan.remove) {
+      const removeResponse = await ctx.github.request({ method: "DELETE", path: `${path}/labels/${encodeURIComponent(label)}` });
+      if (!removeResponse.ok) throw new Error(`GitHub promotion cleanup failed with HTTP ${removeResponse.status}`);
+    }
+    if (intakeStateForLabels(await readLabels()) !== "running") throw new Error("GitHub promotion state could not be confirmed");
+    return "success";
+  } catch (error) {
+    try {
+      if (intakeStateForLabels(await readLabels()) === "running") return "success";
+    } catch {
+      // Preserve the claim when the mutation outcome cannot be established.
+    }
+    throw error;
   }
 };
 
@@ -367,12 +386,14 @@ export default githubChannel({
     }
 
     const raw = issue.raw as {
+      issue?: { label?: { name?: unknown }; labels?: ReadonlyArray<{ name?: unknown }> };
       label?: { name?: unknown };
       labels?: ReadonlyArray<{ name?: unknown }>;
     };
-    const appliedLabel = raw.label?.name;
+    const issuePayload = raw.issue ?? raw;
+    const appliedLabel = raw.label?.name ?? issuePayload.label?.name;
     const labels = new Set(
-      Array.isArray(raw.labels) ? raw.labels.map((entry) => entry?.name).filter((name): name is string => typeof name === "string") : [],
+      (raw.labels ?? issuePayload.labels ?? []).map((entry) => entry?.name).filter((name): name is string => typeof name === "string"),
     );
     const target = repositoryTargetFromInbound(ctx);
     if (appliedLabel === FACTORY_CANDIDATE_LABEL) {
@@ -404,7 +425,8 @@ export default githubChannel({
     });
     if (duplicate.duplicate) return null;
     try {
-      if (!(await markPromotedIssueRunning(ctx, issue.issueNumber, [...labels]))) {
+      const promotionResult = await markPromotedIssueRunning(ctx, issue.issueNumber, [...labels]);
+      if (promotionResult === "invalid") {
         await releaseIntakeDelivery(target, {
           deliveryId: ctx.delivery.id,
           issueNumber: issue.issueNumber,
@@ -413,11 +435,6 @@ export default githubChannel({
         return null;
       }
     } catch (error) {
-      await releaseIntakeDelivery(target, {
-        deliveryId: ctx.delivery.id,
-        issueNumber: issue.issueNumber,
-        mode: "promoted",
-      }).catch(() => undefined);
       throw error;
     }
     return {
