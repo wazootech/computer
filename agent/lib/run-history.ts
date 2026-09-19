@@ -166,7 +166,7 @@ function boundedEventData(base: Omit<RunHistoryEvent, "data">, value: unknown): 
   const redacted = redact(value);
   const fits = (data: unknown): boolean => byteLength(JSON.stringify({ ...base, data })) <= MAX_EVENT_BYTES;
   if (fits(redacted)) return redacted;
-  const serialized = JSON.stringify(redacted);
+  const serialized = JSON.stringify(redacted) ?? "undefined";
   const codePoints = Array.from(serialized);
   const originalBytes = byteLength(serialized);
   let low = 0;
