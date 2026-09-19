@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { readDocument } from "./blob.js";
 import { RUN_RECORDS_PREFIX } from "./blob.js";
-import { appendRunHistoryEvent, readRunHistory, runHistoryRecordPath, startRunHistory } from "./run-history.js";
+import { appendRunHistoryEvent, readRunHistory, runHistoryRecordPath, startRunHistory, assertValidRunId } from "./run-history.js";
 import { repositoryScopeKey, type RepositoryTarget } from "./github/repository-target.js";
 
 export type RunEvent = {
@@ -23,7 +23,7 @@ export const runRecordPath = (target: RepositoryTarget, runId: string): string =
   runHistoryRecordPath(target, runId);
 
 export const legacyRunRecordPath = (target: RepositoryTarget, runId: string): string =>
-  `${RUN_RECORDS_PREFIX}${repositoryScopeKey(target)}/${encodeURIComponent(runId)}.md`;
+  `${RUN_RECORDS_PREFIX}${repositoryScopeKey(target)}/${encodeURIComponent(assertValidRunId(runId))}.md`;
 
 export async function readLegacyRunRecord(target: RepositoryTarget, runId: string) {
   const path = legacyRunRecordPath(target, runId);

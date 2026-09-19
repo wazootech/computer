@@ -1,29 +1,17 @@
 import { defineDynamic, defineTool } from "eve/tools";
 import { z } from "zod";
-import {
-  FACTORY_BLOCKED_LABEL,
-  FACTORY_CANDIDATE_LABEL,
-  FACTORY_DUPLICATE_LABEL,
-  FACTORY_NEEDS_CLARIFICATION_LABEL,
-  FACTORY_QUEUED_LABEL,
-  FACTORY_STATE_LABELS,
-  INTAKE_CLASSIFICATION_LABELS,
-  WAYFINDER_TASK_LABEL,
-} from "#lib/constants.js";
-import { appendRunHistoryEvent } from "#lib/run-history.js";
+import { FACTORY_CANDIDATE_LABEL, WAYFINDER_TASK_LABEL } from "#lib/constants.js";
+import { appendRunHistoryEvent, claimIntakeDecision } from "#lib/run-history.js";
 import { mintInstallationToken } from "#lib/github/app-token.js";
 import { repositoryTargetFromAuth } from "#lib/github/repository-target.js";
+import {
+  isAllowedIntakeClassificationLabel,
+  planIntakeStateTransition,
+  type IntakeState,
+} from "#lib/intake-policy.js";
 import { intakeIssueNumber, isIntakeRun } from "#lib/trust.js";
 
 const githubApiVersion = "2022-11-28";
-const states = {
-  blocked: FACTORY_BLOCKED_LABEL,
-  duplicate: FACTORY_DUPLICATE_LABEL,
-  needs_clarification: FACTORY_NEEDS_CLARIFICATION_LABEL,
-  queued: FACTORY_QUEUED_LABEL,
-} as const;
-
-type IntakeState = keyof typeof states;
 type IssueResponse = { labels?: Array<{ name?: unknown }> };
 
 async function githubFetch(target: { owner: string; name: string }, path: string, init: RequestInit = {}) {
@@ -79,27 +67,19 @@ const tool = defineTool({
     if (input.state === "duplicate" && input.duplicateOf === undefined) throw new Error("A duplicate decision must name the canonical issue.");
     if (input.state === "needs_clarification" && input.questions.length === 0) throw new Error("A clarification decision must include questions.");
     if (input.state === "queued" && input.questions.length > 0) throw new Error("A queued decision cannot include clarification questions.");
-    if (input.classificationLabels.some((label) => !INTAKE_CLASSIFICATION_LABELS.includes(label as (typeof INTAKE_CLASSIFICATION_LABELS)[number]))) {
+    if (input.classificationLabels.some((label) => !isAllowedIntakeClassificationLabel(label))) {
       throw new Error("The classification contains a label outside the configured repository vocabulary.");
     }
     const labels = await readIssue(target, issueNumber);
-    const currentState = FACTORY_STATE_LABELS.find((label) => labels.has(label));
-    if (currentState === states[input.state]) {
+    if (!labels.has(FACTORY_CANDIDATE_LABEL)) throw new Error("Intake decisions require the originating issue to remain factory:candidate.");
+    const plan = planIntakeStateTransition([...labels], input.state as IntakeState, labels.has(WAYFINDER_TASK_LABEL));
+    if (plan.duplicate) {
       return { duplicate: true, issueNumber, labels: [...labels].sort(), state: input.state };
     }
-    if (currentState !== undefined && currentState !== FACTORY_CANDIDATE_LABEL && currentState !== FACTORY_NEEDS_CLARIFICATION_LABEL) {
-      throw new Error(`The issue is already in terminal or promoted factory state: ${currentState}`);
-    }
-    if (input.state === "queued" && !labels.has(WAYFINDER_TASK_LABEL)) {
-      throw new Error(`Queued intake requires the ${WAYFINDER_TASK_LABEL} label.`);
-    }
-    const nextLabel = states[input.state];
-    for (const label of FACTORY_STATE_LABELS) {
-      if (labels.has(label) && label !== nextLabel) await removeLabel(target, issueNumber, label);
-    }
-    await addLabels(target, issueNumber, [...input.classificationLabels, nextLabel]);
-    const deliveryAttribute = auth.attributes["intakeDeliveryId"];
-    const deliveryId2 = typeof deliveryAttribute === "string" ? deliveryAttribute : ctx.session.id;
+    const decisionClaim = await claimIntakeDecision(target, ctx.session.id);
+    if (decisionClaim.duplicate) return { duplicate: true, issueNumber, labels: [...labels].sort(), state: input.state };
+    for (const label of plan.remove) await removeLabel(target, issueNumber, label);
+    await addLabels(target, issueNumber, [...input.classificationLabels, ...plan.add]);
     await appendRunHistoryEvent({
       data: {
         classificationLabels: input.classificationLabels,
@@ -112,14 +92,14 @@ const tool = defineTool({
       runId: ctx.session.id,
       source: {
         channel: "github",
-        deliveryId: deliveryId,
+        deliveryId,
         issueNumber,
         type: "intake",
       },
       status: input.state === "queued" ? "waiting" : input.state === "needs_clarification" ? "waiting" : "manual",
       summary: input.summary,
     }, target);
-    return { duplicate: false, issueNumber, labels: [...labels, ...input.classificationLabels, nextLabel].filter((label, index, all) => all.indexOf(label) === index).sort(), state: input.state };
+    return { duplicate: false, issueNumber, labels: [...labels, ...input.classificationLabels, ...plan.add].filter((label, index, all) => all.indexOf(label) === index).sort(), state: input.state };
   },
 });
 

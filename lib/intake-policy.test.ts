@@ -25,7 +25,7 @@ test("intake state transitions are monotonic and do not reopen running work", ()
 });
 
 test("state labels are derived without preserving stale factory states", () => {
-  assert.equal(intakeStateForLabels([FACTORY_CANDIDATE_LABEL]), null);
+  assert.equal(intakeStateForLabels([FACTORY_CANDIDATE_LABEL, FACTORY_RUNNING_LABEL]), null);
   assert.deepEqual(stateLabelsForTransition([FACTORY_CANDIDATE_LABEL], "queued"), {
     add: [FACTORY_QUEUED_LABEL],
     remove: [FACTORY_CANDIDATE_LABEL],

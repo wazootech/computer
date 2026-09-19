@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  canonicalizeRunTrace,
   classifyAcceptanceOutcome,
   runRepeatabilityReplay,
 } from "./acceptance/repeatability.ts";
@@ -33,4 +34,22 @@ test("outcome classifier preserves manual and flawed distinctions", () => {
   assert.equal(classifyAcceptanceOutcome({ cleanupPassed: true, evidenceComplete: true, humanApprovalPending: true, redactionPassed: true, sideEffectsForbidden: true, tracesEqual: true }), "manual");
   assert.equal(classifyAcceptanceOutcome({ cleanupPassed: false, evidenceComplete: true, redactionPassed: true, sideEffectsForbidden: true, tracesEqual: true }), "flawed");
   assert.equal(classifyAcceptanceOutcome({ cleanupPassed: true, evidenceComplete: false, redactionPassed: true, sideEffectsForbidden: true, tracesEqual: true }), "blocked");
+});
+
+test("canonicalizer redacts fixture credentials and normalizes temporary paths", () => {
+  assert.deepEqual(canonicalizeRunTrace([
+    {
+      id: "random",
+      kind: "fixture",
+      detail: "Authorization: Bearer fixture-secret-123 in /tmp/factory-random",
+      timestamp: new Date().toISOString(),
+      temporaryPath: "/tmp/factory-random",
+    },
+  ], "/tmp/factory-random"), [{
+    detail: "Authorization: Bearer [REDACTED] in <WORKTREE>",
+    id: "event-1",
+    kind: "fixture",
+    timestamp: "<TIMESTAMP>",
+    temporaryPath: "<WORKTREE>",
+  }]);
 });

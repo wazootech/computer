@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { del, get, list, put } from "@vercel/blob";
+import { BlobPreconditionFailedError, del, get, list, put } from "@vercel/blob";
 import { RUN_HISTORY_PREFIX } from "./blob.js";
 import { repositoryScopeKey, type RepositoryTarget } from "./github/repository-target.js";
 import { redact, redactString } from "./redaction.js";
@@ -8,6 +8,13 @@ export const RUN_HISTORY_SCHEMA_VERSION = 1;
 const MAX_EVENT_BYTES = 96_000;
 const MAX_LISTED_EVENTS = 2_000;
 const RETENTION_DAYS = Math.max(1, Number(process.env.RUN_HISTORY_RETENTION_DAYS ?? 30));
+
+export const RUN_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$/u;
+
+export function assertValidRunId(runId: string): string {
+  if (!RUN_ID_PATTERN.test(runId)) throw new Error("runId contains unsupported characters");
+  return runId;
+}
 
 export type RunHistoryStatus = "running" | "waiting" | "completed" | "failed" | "cancelled" | "expired" | "manual";
 
@@ -60,7 +67,7 @@ export type RunHistoryEvent = Readonly<{
   kind: RunHistoryEventKind;
   status?: RunHistoryStatus;
   stage?: string;
-  sequence: number;
+  sequence: string;
   occurredAt: string;
   ingestedAt: string;
   retentionExpiresAt: string;
@@ -86,7 +93,7 @@ export type RunHistorySummary = Readonly<{
   retentionExpiresAt: string;
   eventCount: number;
   lastEventId: string;
-  lastSequence: number;
+  lastSequence: string;
   source?: RunHistorySource;
 }>;
 
@@ -119,7 +126,7 @@ export type AppendRunHistoryInput = Readonly<{
   kind: RunHistoryEventKind;
   status?: RunHistoryStatus;
   stage?: string;
-  sequence?: number;
+  sequence?: string;
   occurredAt?: string;
   summary: string;
   source?: RunHistorySource;
@@ -131,10 +138,13 @@ const segment = (value: string): string => encodeURIComponent(value);
 const parseSegment = (value: string): string => decodeURIComponent(value);
 
 const runPrefix = (target: RepositoryTarget, runId: string): string =>
-  `${RUN_HISTORY_PREFIX}${repositoryScopeKey(target)}/runs/${segment(runId)}/`;
+  `${RUN_HISTORY_PREFIX}${repositoryScopeKey(target)}/runs/${segment(assertValidRunId(runId))}/`;
 
 export const runHistoryRecordPath = (target: RepositoryTarget, runId: string): string =>
   `${runPrefix(target, runId)}record.json`;
+
+export const runHistoryIndexPath = (target: RepositoryTarget, runId: string): string =>
+  `${RUN_HISTORY_PREFIX}${repositoryScopeKey(target)}/index/${segment(assertValidRunId(runId))}.json`;
 
 export const eventPath = (target: RepositoryTarget, runId: string, eventId: string): string =>
   `${runPrefix(target, runId)}events/${segment(eventId)}.json`;
@@ -193,15 +203,27 @@ async function listAll(prefix: string) {
   return blobs;
 }
 
+function immutableComparable(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(immutableComparable);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => !["claimedAt", "ingestedAt", "occurredAt", "retentionExpiresAt"].includes(key))
+      .map(([key, child]) => [key, immutableComparable(child)]),
+  );
+}
+
 async function putImmutable(path: string, value: unknown): Promise<boolean> {
   const contents = JSON.stringify(value);
   if (Buffer.byteLength(contents, "utf8") > MAX_EVENT_BYTES) throw new Error("Run history event exceeds the size limit");
   try {
     await put(path, contents, { access: "private", addRandomSuffix: false, allowOverwrite: false, contentType: "application/json" });
     return false;
-  } catch {
+  } catch (error) {
+    if (!(error instanceof BlobPreconditionFailedError)) throw error;
     const existing = await readJson<unknown>(path);
-    if (JSON.stringify(existing) !== contents) throw new Error(`Conflicting idempotency key at ${path}`);
+    if (existing === null) throw new Error(`Unable to verify existing idempotency record at ${path}`);
+    if (JSON.stringify(immutableComparable(existing)) !== JSON.stringify(immutableComparable(value))) throw new Error(`Conflicting idempotency key at ${path}`);
     return true;
   }
 }
@@ -210,6 +232,20 @@ const summarizeSource = (source: RunHistorySource | undefined): RunHistorySource
   if (!source) return undefined;
   return Object.fromEntries(Object.entries(source).filter(([, value]) => value !== undefined)) as RunHistorySource;
 };
+
+async function persistRunSummary(target: RepositoryTarget, runId: string): Promise<void> {
+  const result = await readRunHistory(target, runId);
+  if (!result.found) return;
+  const body = JSON.stringify(result.record.summary);
+  const options = {
+    access: "private" as const,
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    contentType: "application/json",
+  };
+  await put(runHistoryRecordPath(target, runId), body, options);
+  await put(runHistoryIndexPath(target, runId), body, options);
+}
 
 export async function appendRunHistoryEvent(input: AppendRunHistoryInput, target: RepositoryTarget) {
   const rootRunId = input.rootRunId ?? input.runId;
@@ -232,7 +268,7 @@ export async function appendRunHistoryEvent(input: AppendRunHistoryInput, target
     rootRunId,
     runId: input.runId,
     schemaVersion: RUN_HISTORY_SCHEMA_VERSION,
-    sequence: input.sequence ?? Date.now(),
+    sequence: input.sequence ?? `${occurredAt}:${eventId}`,
     source: summarizeSource(input.source),
     stage: input.stage,
     status: input.status ?? statusForKind(input.kind),
@@ -243,6 +279,11 @@ export async function appendRunHistoryEvent(input: AppendRunHistoryInput, target
   };
   const path = eventPath(target, input.runId, eventId);
   const duplicate = await putImmutable(path, event);
+  try {
+    await persistRunSummary(target, input.runId);
+  } catch (error) {
+    console.error("run history summary projection failed", error instanceof Error ? error.message : "unknown error");
+  }
   return { duplicate, eventId, path, runId: input.runId };
 }
 
@@ -266,10 +307,11 @@ export async function readRunHistory(target: RepositoryTarget, runId: string): P
   if (blobs.length === 0) return { found: false, path: runHistoryRecordPath(target, runId) };
   const events = (await Promise.all(blobs.map(({ pathname }) => readJson<RunHistoryEvent>(pathname))))
     .filter((event): event is RunHistoryEvent => event !== null)
-    .sort((a, b) => a.sequence - b.sequence || a.occurredAt.localeCompare(b.occurredAt) || a.eventId.localeCompare(b.eventId));
+    .sort((a, b) => a.sequence.localeCompare(b.sequence) || a.occurredAt.localeCompare(b.occurredAt) || a.eventId.localeCompare(b.eventId));
   if (events.length === 0) return { found: false, path: runHistoryRecordPath(target, runId) };
   const first = events[0];
   const last = events[events.length - 1];
+  if (!first || !last) return { found: false, path: runHistoryRecordPath(target, runId) };
   const status = events.reduce((current, event) => statusForKind(event.kind, event.status ?? current), "running" as RunHistoryStatus);
   const terminal = ["completed", "failed", "cancelled", "manual"].includes(status);
   const summary: RunHistorySummary = {
@@ -292,25 +334,29 @@ export async function readRunHistory(target: RepositoryTarget, runId: string): P
     repositoryFullName: target.fullName,
     retentionExpiresAt: retentionExpiry(first.occurredAt),
   };
+  if (Date.parse(summary.retentionExpiresAt) <= Date.now()) {
+    void deleteRunHistory(target, runId).catch(() => undefined);
+    return { found: false, path: runHistoryRecordPath(target, runId) };
+  }
   return { found: true, path: runHistoryRecordPath(target, runId), record: { events, summary } };
 }
 
 export async function listRunHistory(target: RepositoryTarget, options: RunHistoryListOptions = {}) {
-  const blobs = await listAll(`${RUN_HISTORY_PREFIX}${repositoryScopeKey(target)}/runs/`);
-  const runIds = [...new Set(blobs.map(({ pathname }) => {
-    const match = pathname.match(/\/runs\/([^/]+)\/events\//u);
-    return match ? parseSegment(match[1]) : null;
-  }).filter((runId): runId is string => runId !== null))];
+  const blobs = await listAll(`${RUN_HISTORY_PREFIX}${repositoryScopeKey(target)}/index/`);
   const records = [];
-  for (const runId of runIds) {
-    const result = await readRunHistory(target, runId);
+  for (const { pathname } of blobs) {
+    const summary = await readJson<RunHistorySummary>(pathname);
+    if (!summary) continue;
+    if (Date.parse(summary.retentionExpiresAt) <= Date.now()) {
+      void deleteRunHistory(target, summary.runId).catch(() => undefined);
+      continue;
+    }
     if (
-      result.found &&
-      (!options.status || result.record.summary.status === options.status) &&
-      (!options.issueNumber || result.record.summary.source?.issueNumber === options.issueNumber) &&
-      (!options.pullRequestNumber || result.record.summary.source?.pullRequestNumber === options.pullRequestNumber) &&
-      (!options.deliveryId || result.record.summary.source?.deliveryId === options.deliveryId)
-    ) records.push(result.record.summary);
+      (!options.status || summary.status === options.status) &&
+      (!options.issueNumber || summary.source?.issueNumber === options.issueNumber) &&
+      (!options.pullRequestNumber || summary.source?.pullRequestNumber === options.pullRequestNumber) &&
+      (!options.deliveryId || summary.source?.deliveryId === options.deliveryId)
+    ) records.push(summary);
   }
   records.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   return records.slice(0, Math.max(1, Math.min(options.limit ?? 50, 100)));
@@ -318,7 +364,10 @@ export async function listRunHistory(target: RepositoryTarget, options: RunHisto
 
 export async function deleteRunHistory(target: RepositoryTarget, runId: string) {
   const blobs = await listAll(runPrefix(target, runId));
-  await Promise.all(blobs.map(({ pathname }) => del(pathname)));
+  await Promise.all([
+    ...blobs.map(({ pathname }) => del(pathname)),
+    del(runHistoryIndexPath(target, runId)),
+  ]);
   return { deleted: blobs.length > 0, count: blobs.length };
 }
 
@@ -327,7 +376,7 @@ export async function claimIntakeDelivery(
   input: { issueNumber: number; deliveryId: string; mode: "candidate" | "promoted" },
 ) {
   const path = `${intakePrefix(target, input.issueNumber)}${input.mode}/${segment(input.deliveryId)}.json`;
-  return putImmutable(path, {
+  const duplicate = await putImmutable(path, {
     deliveryId: input.deliveryId,
     issueNumber: input.issueNumber,
     mode: input.mode,
@@ -335,6 +384,29 @@ export async function claimIntakeDelivery(
     schemaVersion: RUN_HISTORY_SCHEMA_VERSION,
     claimedAt: nowIso(),
   });
+  return { duplicate, path };
+}
+
+export async function claimIntakeDecision(
+  target: RepositoryTarget,
+  runId: string,
+): Promise<{ duplicate: boolean; path: string }> {
+  const path = `${RUN_HISTORY_PREFIX}${repositoryScopeKey(target)}/intake/decisions/${segment(assertValidRunId(runId))}.json`;
+  const duplicate = await putImmutable(path, {
+    claimedAt: nowIso(),
+    runId: assertValidRunId(runId),
+    schemaVersion: RUN_HISTORY_SCHEMA_VERSION,
+  });
+  return { duplicate, path };
+}
+
+export async function releaseIntakeDelivery(
+  target: RepositoryTarget,
+  input: { issueNumber: number; deliveryId: string; mode: "candidate" | "promoted" },
+): Promise<void> {
+  const path = `${intakePrefix(target, input.issueNumber)}${input.mode}/${segment(input.deliveryId)}.json`;
+  const claim = await readJson<{ deliveryId?: string }>(path);
+  if (claim?.deliveryId === input.deliveryId) await del(path);
 }
 
 export const runHistoryPrefixFor = (target: RepositoryTarget, runId: string): string => runPrefix(target, runId);

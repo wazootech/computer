@@ -1,4 +1,5 @@
 import { defineHook } from "eve/hooks";
+import { sourceFromAuth, hasGithubCorrelation } from "#lib/run-history-source.js";
 import { appendRunHistoryEvent } from "#lib/run-history.js";
 import { repositoryTargetFromAuth } from "#lib/github/repository-target.js";
 
@@ -23,25 +24,6 @@ type RuntimeEvent = {
   type: string;
   data?: Record<string, unknown>;
 };
-
-function sourceFromAuth(auth: unknown, channel: unknown) {
-  const context = auth && typeof auth === "object" && "current" in auth
-    ? ((auth as { current?: unknown; initiator?: unknown }).current ?? (auth as { initiator?: unknown }).initiator)
-    : auth;
-  const attributes = (context as { attributes?: Record<string, string> } | null)?.attributes ?? {};
-  const numberFrom = (key: string) => {
-    const value = Number(attributes[key]);
-    return Number.isSafeInteger(value) && value > 0 ? value : undefined;
-  };
-  return {
-    channel: typeof channel === "string" ? channel : undefined,
-    deliveryId: attributes.githubDeliveryId,
-    event: attributes.githubEvent,
-    issueNumber: numberFrom("githubIssueNumber"),
-    pullRequestNumber: numberFrom("githubPullRequestNumber"),
-    type: attributes.githubSourceType,
-  };
-}
 
 function summaryFor(event: RuntimeEvent): string {
   const data = event.data ?? {};
@@ -75,6 +57,15 @@ async function record(event: RuntimeEvent, ctx: { session: { id: string; auth: u
   if (!target) return;
   const mapped = EVENT_MAP[event.type];
   if (!mapped) return;
+  const source = sourceFromAuth(ctx.session.auth, ctx.channel.kind);
+  if (!hasGithubCorrelation(source)) {
+    console.error("run history correlation incomplete for GitHub session", {
+      event: source.event,
+      issueNumber: source.issueNumber,
+      pullRequestNumber: source.pullRequestNumber,
+      type: source.type,
+    });
+  }
   const data = event.data ?? {};
   const childRunId = typeof data.childSessionId === "string" ? data.childSessionId : undefined;
   try {
@@ -91,7 +82,7 @@ async function record(event: RuntimeEvent, ctx: { session: { id: string; auth: u
       occurredAt: event.meta?.at,
       parentRunId: childRunId ? ctx.session.id : undefined,
       runId: ctx.session.id,
-      source: sourceFromAuth(ctx.session.auth, ctx.channel.kind),
+      source,
       stage: typeof data.name === "string" ? data.name : typeof data.subagentName === "string" ? data.subagentName : undefined,
       status: mapped.status,
       summary: summaryFor(event),

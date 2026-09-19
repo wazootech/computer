@@ -39,17 +39,23 @@ export function factoryBrainPolicy(ctx: ApprovalContext): ApprovalStatus {
   return "user-approval";
 }
 
-function intakeLabelInput(ctx: ApprovalContext): { issueNumber?: unknown; labels?: unknown } {
-  return (ctx.toolInput ?? {}) as { issueNumber?: unknown; labels?: unknown };
+function intakeLabelInput(ctx: ApprovalContext): { issueNumber?: unknown; labels?: unknown; label?: unknown } {
+  return (ctx.toolInput ?? {}) as { issueNumber?: unknown; labels?: unknown; label?: unknown };
 }
 
 export function labelPolicy(ctx: ApprovalContext): ApprovalStatus {
   const auth = ctx.session.auth.current;
+  const input = intakeLabelInput(ctx);
+  const labels = [
+    ...(Array.isArray(input.labels) ? input.labels.filter((label): label is string => typeof label === "string") : []),
+    ...(typeof input.label === "string" ? [input.label] : []),
+  ];
+  if (isAutonomous(auth) && labels.some((label) => FACTORY_STATE_LABELS.includes(label as (typeof FACTORY_STATE_LABELS)[number]))) {
+    return denied("Factory state labels can only be changed by the intake state transition tool.");
+  }
   if (!isIntakeRun(auth)) return isAutonomous(auth) ? "not-applicable" : writePolicy(ctx);
   const intakeIssue = intakeIssueNumber(auth);
-  const input = intakeLabelInput(ctx);
   if (input.issueNumber !== intakeIssue) return denied("Intake may label only its originating issue.");
-  const labels = Array.isArray(input.labels) ? input.labels.filter((label): label is string => typeof label === "string") : [];
   if (labels.some((label) => FACTORY_STATE_LABELS.includes(label as (typeof FACTORY_STATE_LABELS)[number]))) {
     return denied("Use set_intake_state for factory state transitions.");
   }

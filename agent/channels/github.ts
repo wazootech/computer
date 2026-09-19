@@ -26,12 +26,13 @@ import {
   resolveInvocationNames,
   resolveTeamMention,
 } from "../lib/github/bot-name.js";
-import { claimIntakeDelivery } from "../lib/run-history.js";
+import { claimIntakeDelivery, releaseIntakeDelivery } from "../lib/run-history.js";
 import { stampAutonomous, stampSource, stampTrusted } from "../lib/trust.js";
 import {
   repositoryAttributes,
   repositoryTargetFromInbound,
 } from "../lib/github/repository-target.js";
+import { planIntakeStateTransition } from "../lib/intake-policy.js";
 
 const githubCredentials = {
   appId: () => process.env.GITHUB_APP_ID ?? "",
@@ -168,15 +169,17 @@ const isTrustedLabeler = async (
 const markPromotedIssueRunning = async (
   ctx: GitHubInboundContext,
   issueNumber: number,
+  labels: readonly string[],
 ): Promise<boolean> => {
   try {
+    const plan = planIntakeStateTransition(labels, "running", true);
     const added = await ctx.github.request({
       method: "POST",
       path: `/repos/${ctx.repository.owner}/${ctx.repository.name}/issues/${issueNumber}/labels`,
-      body: { labels: [FACTORY_RUNNING_LABEL] },
+      body: { labels: plan.add },
     });
     if (!added.ok) return false;
-    for (const label of [FACTORY_PROMOTED_LABEL, FACTORY_QUEUED_LABEL]) {
+    for (const label of plan.remove) {
       const removed = await ctx.github.request({
         method: "DELETE",
         path: `/repos/${ctx.repository.owner}/${ctx.repository.name}/issues/${issueNumber}/labels/${encodeURIComponent(label)}`,
@@ -383,7 +386,7 @@ export default githubChannel({
         issueNumber: issue.issueNumber,
         mode: "candidate",
       });
-      if (duplicate) return null;
+      if (duplicate.duplicate) return null;
       return {
         auth: stampGithubAutonomous(ctx, issue.issueNumber, "intake", "candidate_admission"),
         context: [FACTORY_CANDIDATE_TASK],
@@ -399,13 +402,30 @@ export default githubChannel({
     ) {
       return null;
     }
-    if (!(await markPromotedIssueRunning(ctx, issue.issueNumber))) return null;
     const duplicate = await claimIntakeDelivery(target, {
       deliveryId: ctx.delivery.id,
       issueNumber: issue.issueNumber,
       mode: "promoted",
     });
-    if (duplicate) return null;
+    if (duplicate.duplicate) return null;
+    try {
+      const marked = await markPromotedIssueRunning(ctx, issue.issueNumber, [...labels]);
+      if (!marked) {
+        await releaseIntakeDelivery(target, {
+          deliveryId: ctx.delivery.id,
+          issueNumber: issue.issueNumber,
+          mode: "promoted",
+        }).catch(() => undefined);
+        return null;
+      }
+    } catch (error) {
+      await releaseIntakeDelivery(target, {
+        deliveryId: ctx.delivery.id,
+        issueNumber: issue.issueNumber,
+        mode: "promoted",
+      }).catch(() => undefined);
+      throw error;
+    }
     return {
       auth: stampGithubAutonomous(ctx, issue.issueNumber, "factory", "human_promotion"),
       context: [FACTORY_INTAKE_TASK],

@@ -9,37 +9,47 @@ import {
   FACTORY_PROMOTED_LABEL,
   FACTORY_QUEUED_LABEL,
   FACTORY_RUNNING_LABEL,
+  FACTORY_STATE_LABELS,
   INTAKE_CLASSIFICATION_LABELS,
   isFactoryStateLabel,
 } from "./constants.ts";
 
 export type IntakeState =
-  | "queued"
-  | "needs_clarification"
-  | "duplicate"
   | "blocked"
-  | "running"
+  | "candidate"
+  | "completed"
+  | "duplicate"
   | "failed"
   | "manual"
-  | "completed";
+  | "needs_clarification"
+  | "promoted"
+  | "queued"
+  | "running";
 
 const stateLabels: Record<IntakeState, string> = {
   blocked: FACTORY_BLOCKED_LABEL,
+  candidate: FACTORY_CANDIDATE_LABEL,
   completed: FACTORY_COMPLETED_LABEL,
   duplicate: FACTORY_DUPLICATE_LABEL,
   failed: FACTORY_FAILED_LABEL,
   manual: FACTORY_MANUAL_LABEL,
   needs_clarification: FACTORY_NEEDS_CLARIFICATION_LABEL,
+  promoted: FACTORY_PROMOTED_LABEL,
   queued: FACTORY_QUEUED_LABEL,
   running: FACTORY_RUNNING_LABEL,
 };
 
-const allowedTransitions: Record<string, readonly IntakeState[]> = {
-  [FACTORY_CANDIDATE_LABEL]: ["blocked", "duplicate", "needs_clarification", "queued"],
-  [FACTORY_NEEDS_CLARIFICATION_LABEL]: ["blocked", "queued"],
-  [FACTORY_QUEUED_LABEL]: ["running"],
-  [FACTORY_PROMOTED_LABEL]: ["running"],
-  [FACTORY_RUNNING_LABEL]: ["completed", "failed", "manual"],
+const allowedTransitions: Record<IntakeState, readonly IntakeState[]> = {
+  blocked: [],
+  candidate: ["blocked", "duplicate", "needs_clarification", "queued"],
+  completed: [],
+  duplicate: [],
+  failed: [],
+  manual: [],
+  needs_clarification: ["blocked", "queued"],
+  promoted: ["running"],
+  queued: ["promoted", "running"],
+  running: ["completed", "failed", "manual"],
 };
 
 export function labelForIntakeState(state: IntakeState): string {
@@ -47,10 +57,13 @@ export function labelForIntakeState(state: IntakeState): string {
 }
 
 export function intakeStateForLabels(labels: readonly string[]): IntakeState | null {
-  for (const [state, label] of Object.entries(stateLabels) as [IntakeState, string][]) {
-    if (labels.includes(label)) return state;
+  const present = FACTORY_STATE_LABELS.filter((label) => labels.includes(label));
+  if (present.includes(FACTORY_PROMOTED_LABEL)) {
+    return present.length === 2 && present.includes(FACTORY_QUEUED_LABEL) ? "promoted" : null;
   }
-  return null;
+  if (present.length !== 1) return null;
+  const entry = (Object.entries(stateLabels) as [IntakeState, string][]).find(([, label]) => label === present[0]);
+  return entry?.[0] ?? null;
 }
 
 export function canTransitionIntakeState(
@@ -58,10 +71,9 @@ export function canTransitionIntakeState(
   next: IntakeState,
   hasWayfinderTask: boolean,
 ): boolean {
-  const current = currentLabels.find((label) => allowedTransitions[label]);
   if (next === "queued" && !hasWayfinderTask) return false;
-  if (current === undefined) return next === "queued" && hasWayfinderTask;
-  return allowedTransitions[current]?.includes(next) ?? false;
+  const current = intakeStateForLabels(currentLabels);
+  return current !== null && (current === next || allowedTransitions[current].includes(next));
 }
 
 export function isAllowedIntakeClassificationLabel(label: string): boolean {
@@ -79,4 +91,18 @@ export function stateLabelsForTransition(currentLabels: readonly string[], next:
   const nextLabel = labelForIntakeState(next);
   const remove = currentLabels.filter((label) => isFactoryStateLabel(label) && label !== nextLabel);
   return { add: [nextLabel], remove };
+}
+
+export function planIntakeStateTransition(
+  currentLabels: readonly string[],
+  next: IntakeState,
+  hasWayfinderTask: boolean,
+): { duplicate: boolean; add: string[]; remove: string[] } {
+  const current = intakeStateForLabels(currentLabels);
+  if (current === null) throw new Error("Issue has missing or conflicting factory state labels.");
+  if (current === next) return { duplicate: true, add: [], remove: [] };
+  if (!canTransitionIntakeState(currentLabels, next, hasWayfinderTask)) {
+    throw new Error(`Illegal intake state transition from ${current} to ${next}`);
+  }
+  return { duplicate: false, ...stateLabelsForTransition(currentLabels, next) };
 }
