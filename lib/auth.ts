@@ -25,6 +25,26 @@ function requireEnvironmentVariable(name: string): string {
   throw new Error(`Missing required environment variable: ${name}`);
 }
 
+function optionalEnvironmentVariable(name: string): string | null {
+  const value = process.env[name]?.trim();
+  return value ? value : null;
+}
+
+/**
+ * GitHub sign-in credentials, when the deployment has them.
+ *
+ * Linking a GitHub account is what gives a chat session a verified GitHub login:
+ * write approvals are attributed to `githubLogin`, and the approval responder
+ * check resolves that attribute against the approver-team roster. Without these
+ * credentials the deployment signs in exactly as before and approvals from chat
+ * report the missing login instead of guessing an identity.
+ */
+const githubProviderCredentials = ((): { clientId: string; clientSecret: string } | null => {
+  const clientId = optionalEnvironmentVariable("GITHUB_OAUTH_CLIENT_ID");
+  const clientSecret = optionalEnvironmentVariable("GITHUB_OAUTH_CLIENT_SECRET");
+  return clientId && clientSecret ? { clientId, clientSecret } : null;
+})();
+
 export const auth = betterAuth({
   baseURL: {
     allowedHosts: getAllowedHosts(),
@@ -46,5 +66,6 @@ export const auth = betterAuth({
       clientId: requireEnvironmentVariable("VERCEL_APP_CLIENT_ID"),
       clientSecret: requireEnvironmentVariable("VERCEL_APP_CLIENT_SECRET"),
     },
+    ...(githubProviderCredentials === null ? {} : { github: githubProviderCredentials }),
   },
 });
