@@ -1,10 +1,10 @@
-# Upstream notes
+# Public playbook notes
 
 ## Source map
 
 - Sitemap: `https://polsia.com/sitemap.xml`
-- No root `llms.txt` or `llms-full.txt` was found on Polsia during the scrape.
-- The site is currently best treated as a sitemap-backed public corpus rather than a dedicated docs surface.
+- No root `llms.txt` or `llms-full.txt` was found on the source site during the scrape.
+- The source is best treated as a sitemap-backed public corpus rather than a dedicated docs surface.
 
 ## Repeated themes in the scrape
 
