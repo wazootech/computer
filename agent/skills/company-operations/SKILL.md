@@ -1,9 +1,6 @@
 ---
 name: company-operations
 description: Use when the user invokes `/company` or asks for company validation, planning, building, branding, launch, growth, or recurring operating reviews. This is Computer's company-operations planning workflow.
-compatibility: Created for Zo Computer
-metadata:
-  author: etok.zo.computer
 ---
 
 # Company operating workflow
