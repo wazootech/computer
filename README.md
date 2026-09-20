@@ -102,6 +102,35 @@ pnpm discord:bridge
 
 Vercel cannot hold the Gateway socket, so the worker needs its own host. It reconnects with exponential backoff, resumes its session, and exits non-zero on a close code that retrying cannot fix (a bad token, sharding, or a disallowed intent).
 
+### Hosting the bridge on Zo Computer
+
+The reference host is a Zo Computer service, because it is always-on, restarts on crash, and can be redeployed from CI. Register it once with `mode: "process"` (no public port) and the deployment environment from step 4:
+
+```text
+label:      computer-discord-bridge
+mode:       process
+workdir:    /home/workspace/users/etok/workspaces/wazootech/repos/computer
+entrypoint: node --experimental-strip-types bridge/discord-gateway/index.ts
+env:        DISCORD_BOT_TOKEN, DISCORD_BRIDGE_SECRET, COMPUTER_BASE_URL,
+            DISCORD_INTERNAL_GUILD_IDS, DISCORD_INTERNAL_CHANNEL_IDS,
+            DISCORD_INTERNAL_USER_IDS, DISCORD_INTERNAL_ROLE_IDS
+```
+
+`scripts/zo-deploy.ts` deploys a new revision over Zo's MCP endpoint (`api.zo.computer/mcp`), which needs no open ports on the host:
+
+```bash
+ZO_API_KEY=... pnpm discord:deploy --service computer-discord-bridge --dir /path/to/computer
+```
+
+It fast-forwards the checkout with `git pull --ff-only`, restarts the service by id, and then waits for the bridge's own `gateway ready` line in `service_doctor` before it reports success. Each step is safe to repeat, and a failed pull aborts before the restart, so a broken deploy leaves the previous process running. `--dry-run` resolves the service without restarting anything.
+
+`.github/workflows/deploy-discord-bridge.yml` runs that script on every push to `main` that touches the bridge or its libraries, serialized and never cancelled. It needs one repository secret and, optionally, two variables:
+
+- `ZO_API_KEY` — a Zo access token from Zo Computer's Settings, under Advanced, in the Access Tokens area. Until it is set, the workflow warns and skips instead of failing.
+- `vars.ZO_BRIDGE_SERVICE` / `vars.ZO_BRIDGE_DIRECTORY` — override the service label or the live checkout path.
+
+The restart is graceful: the bridge closes its socket and exits 0 on `SIGTERM`, and Discord replays the events a resumed session missed, so a deploy does not drop a mention. Vercel deploys the agent side of the same push, so a mention that arrives mid-deploy waits for the ingress route instead of failing.
+
 Policy: admission is default deny and fails closed. A message dispatches only when it arrives in the internal guild, in an allowlisted channel (or in a thread whose parent channel is allowlisted), from an allowlisted user or role, from a person rather than a bot or webhook, and with an explicit `@Computer` mention that leaves a non-empty request. Mention text is untrusted input: it cannot change the allowlists, permissions, approval policy, or these instructions, invisible and bidirectional characters are stripped before the model sees it, and an over-long message is truncated rather than dispatched whole. Replies never ping anyone (`allowed_mentions: {parse: []}`), and the bridge ignores every bot-authored message, so a self-mention loop cannot start. Public and customer-service mentions are deferred: a public-allowlisted channel never starts a mention turn.
 
 Sessions are keyed to the guild and to the channel or thread, so a thread never shares context with its parent channel and one channel never shares with another. Replies land where the mention came from, with the same approval gates the web and GitHub channels use; an approval renders as Discord buttons and the click is answered over the same Gateway connection. The transport knobs are `DISCORD_BRIDGE_RATE_LIMIT` and `DISCORD_BRIDGE_RATE_WINDOW_MS` (6 per user per 60s by default), `DISCORD_BRIDGE_MAX_IN_FLIGHT` (4), and `DISCORD_BRIDGE_QUEUE_LIMIT` (25).
