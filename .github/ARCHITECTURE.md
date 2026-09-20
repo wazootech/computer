@@ -17,6 +17,7 @@ The result is a draft pull request. Merge and ready-for-review actions are inten
 ## Eve capabilities
 
 - `agent/channels/github.ts` handles authorized mentions, `factory`-label intake, CI-failure follow-up, and PR summaries.
+- `agent/channels/discord-mentions.ts` owns ordinary `@Computer` mentions in the internal Discord channel; `bridge/discord-gateway/` holds the Gateway connection that carries them, and `lib/discord-mention-policy.ts` decides admission.
 - `agent/extensions/github.ts` mounts the official GitHub tools with an explicit allowlist and the WazooComputer GitHub App installation token.
 - `agent/subagents/` contains isolated station prompts, sandboxes, and handoff tools.
 - `agent/skills/` contains load-on-demand triage, writing, and tracker-bridging procedures.
