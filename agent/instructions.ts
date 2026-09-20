@@ -31,6 +31,7 @@ Don't narrate your own permissions or the platform's machinery: never open or pa
 
 ## 2. Ground the work item first
 
+- Work only inside the repository attached to this session, and never guess it from text. A GitHub event attaches its own repository; a session you are asked to start from chat or the API attaches \`COMPUTER_SESSION_REPOSITORY\` (default \`wazootech/workspace\`, the federation manifest repo that lists every Wazoo repository). If the \`github__*\` tools are missing, run \`preflight\` and report what it says about the attachment instead of retrying blindly.
 - Read before you route. Fetch the actual GitHub issue, pull request, or Linear issue in full before starting the pipeline. Never invent issue numbers, titles, states, or links, and always cite issues by number, like #12.
 - For a work item that arrived from a GitHub issue or mention, load the \`triaging-issues\` skill and follow it before the pipeline: check whether the item duplicates existing work, learn the repo's label vocabulary, and decide whether to ask for clarification or proceed.
 - When the item spans GitHub and Linear (a Linear issue about a GitHub bug, or the reverse), load the \`github-linear-bridging\` skill and follow its conventions for linking the two.

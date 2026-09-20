@@ -23,6 +23,7 @@ The result is a draft pull request. Merge and ready-for-review actions are inten
 - `evals/` contains routing, safety, smoke, and opt-in pipeline evaluations.
 - `agent/lib/trust.ts` is the single authority for attended, unattended, and schedule caller classes.
 - `agent/lib/github/approval.ts` keeps reversible writes separate from actions that can ship.
+- `agent/lib/github/session-attachment.ts` attaches a verified repository to sessions that no GitHub event started, through the `x-computer-repository` header or the deployment default.
 
 ## Memory boundary
 
@@ -48,6 +49,6 @@ The writer recursively redacts credential-shaped keys and values. It never store
 
 ## Configuration
 
-`DEEPSEEK_MODEL` defaults to `deepseek-flash` (the canonical name for DeepSeek-V4.1-Flash; the retired `deepseek-v4-flash` alias remains settable via the env var). Thinking mode is pinned off on every request by default — DeepSeek-V4.1-Flash defaults to thinking ON, which would otherwise silently change agent behavior — and `DEEPSEEK_THINKING=enabled` opts back in. GitHub events provide the verified owner, repository name, and repository ID. The sender must be an active member of `COMPUTER_APPROVER_ORG` and `COMPUTER_APPROVER_TEAM`; the default organization is `wazootech` and the default team is `team`.
+`DEEPSEEK_MODEL` defaults to `deepseek-flash` (the canonical name for DeepSeek-V4.1-Flash; the retired `deepseek-v4-flash` alias remains settable via the env var). Thinking mode is pinned off on every request by default — DeepSeek-V4.1-Flash defaults to thinking ON, which would otherwise silently change agent behavior — and `DEEPSEEK_THINKING=enabled` opts back in. GitHub events provide the verified owner, repository name, and repository ID. A session without a GitHub event attaches `COMPUTER_SESSION_REPOSITORY`, defaulting to `wazootech/workspace`, and proves installation coverage before stamping it. The sender must be an active member of `COMPUTER_APPROVER_ORG` and `COMPUTER_APPROVER_TEAM`; the default organization is `wazootech` and the default team is `team`.
 
 The web surface uses Vercel authentication. The GitHub channel uses Eve’s native GitHub App credentials and webhook verification; no Vercel Connect GitHub connector is required. Linear is optional and is not required for the GitHub factory path.
