@@ -1,6 +1,6 @@
 # Computer architecture
 
-Computer adopts the official Eve software-factory pattern while keeping Wazoo-specific identity, credentials, and memory boundaries.
+Computer is Wazoo's general assistant for the whole team, and it adopts the official Eve software-factory pattern for engineering work while keeping Wazoo-specific identity, credentials, and memory boundaries. The factory described below covers Computer's engineering path, not the whole of its job.
 
 ## Runtime
 
