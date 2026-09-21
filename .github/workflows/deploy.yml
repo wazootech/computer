@@ -1,0 +1,75 @@
+name: deploy
+
+# The agent deploys itself: Vercel builds the eve app on push to main. The
+# Discord Gateway bridge is the one part that does not, because it holds a
+# websocket on a Zo Computer service, and nothing redeploys that service for us.
+#
+# This workflow closes that gap through Zo's MCP endpoint
+# (`https://api.zo.computer/mcp`) with an access token, so it needs no open port
+# on the host and no `/zo/ask` call. `scripts/zo-deploy.ts` is the client: it
+# fast-forwards the live checkout, restarts the service, and waits for the
+# bridge's own ready line before reporting success. A failed fast-forward stops
+# before the restart, so the previous process keeps serving.
+#
+# The same typed surface is available from `zocomputer-tools`
+# (https://github.com/EthanThatOneKid/zocomputer-tools). The deploy path keeps
+# its own small client instead: that package is not on npm yet, so consuming it
+# here would add a git-sourced dependency that compiles on install to this
+# repo's dependency graph, and therefore to the Vercel production install.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "bridge/**"
+      - "lib/discord-bridge.ts"
+      - "lib/discord-mention-policy.ts"
+      - "lib/discord-policy.ts"
+      - "lib/discord-text.ts"
+      - "lib/zo-deploy.ts"
+      - "scripts/zo-deploy.ts"
+      - "package.json"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+
+concurrency:
+  # Deploys are serialized, never cancelled: two overlapping restarts would race
+  # on the live checkout, and a cancelled deploy would report nothing.
+  group: deploy-zo-service
+  cancel-in-progress: false
+
+env:
+  # Override with repository variables if the service or its checkout moves.
+  ZO_SERVICE: ${{ vars.ZO_SERVICE || 'computer-discord-bridge' }}
+  ZO_SERVICE_DIRECTORY: ${{ vars.ZO_SERVICE_DIRECTORY || '/home/workspace/users/etok/workspaces/wazootech/repos/computer' }}
+
+jobs:
+  deploy-zo-service:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Check the deploy credential
+        id: credential
+        env:
+          ZO_API_KEY: ${{ secrets.ZO_API_KEY }}
+        run: |
+          if [ -z "${ZO_API_KEY}" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::ZO_API_KEY is not set, so nothing was deployed. The runbook in README.md covers the token and the service."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy the live Zo service
+        if: steps.credential.outputs.configured == 'true'
+        env:
+          ZO_API_KEY: ${{ secrets.ZO_API_KEY }}
+        run: |
+          node --experimental-strip-types scripts/zo-deploy.ts \
+            --service "${ZO_SERVICE}" \
+            --dir "${ZO_SERVICE_DIRECTORY}" \
+            --expect-sha "${GITHUB_SHA}"
