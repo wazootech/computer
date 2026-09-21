@@ -166,4 +166,18 @@ pnpm build
 pnpm build:eve
 ```
 
+## Agent File
+
+`agents/@wazootech/computer/computer.af` is the generated [Agent File](https://github.com/letta-ai/agent-file) declaration of Computer's agent layer, and `agents/@wazootech/data/data.af` is Data's, projected from its source under `agents/data/agent/` ([#72](https://github.com/wazootech/computer/issues/72), [#73](https://github.com/wazootech/computer/issues/73)). Both are produced from source and never hand-edited:
+
+```bash
+pnpm build:eve                 # Computer's projection reads the compiled manifest
+pnpm export:agent-file         # regenerate computer.af
+pnpm check:agent-file          # fail if the committed file is out of date
+pnpm export:data-agent-file    # regenerate data.af (source mode: no eve build yet)
+pnpm check:data-agent-file
+```
+
+The files carry the system prompt verbatim, the allowlisted memory blocks, and the bound tool surface; see [`.github/ARCHITECTURE.md`](.github/ARCHITECTURE.md) for what is deliberately left out. Data's published copy lives in `wazootech/data` under the same gallery path, and this repository's CI is what keeps the two from drifting: regenerate here, then copy the file across.
+
 The factory evals are under `evals/`. Full-pipeline evals can create branches and consume model tokens, so run them only against a disposable target repository.

@@ -50,6 +50,10 @@ eve deploy --non-interactive --yes [--project <name-or-id>]
 
 A setup may report `eve link` as a prerequisite; run it, then retry the continuation. When a completed setup event has `deploymentRequired: true`, run the `next` command it reports.
 
+## Regenerate the agent file after agent changes
+
+`agents/@wazootech/computer/computer.af` is generated from this agent's source. After changing instructions, tools, skills, or `agent/agent-file-declaration.json`, run `pnpm build:eve` then `pnpm export:agent-file`, and commit the result. Never hand-edit the `.af`; `pnpm check:agent-file` fails when it drifts.
+
 ## Validate the change
 
 Run the validation the task requests. When it does not establish the behavior you changed, run the narrowest relevant check.
