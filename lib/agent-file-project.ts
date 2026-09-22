@@ -10,7 +10,7 @@
  *
  *   - `system` is the compiled prompt, byte for byte.
  *   - `llm_config` is declared in `agent/agent-file-declaration.json`; the model
- *     handle is cross-checked against `lib/deepseek.ts` by the test suite.
+ *     handle is cross-checked against `lib/gateway.ts` by the test suite.
  *   - `blocks[]` are curated and allowlisted. Private surfaces export as
  *     schema-only, with the reason recorded in the declaration.
  *   - `tools[]` declare the bound surface (name, description, source path).
