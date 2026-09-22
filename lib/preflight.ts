@@ -7,6 +7,11 @@ import {
   resolveDeepSeekThinking,
 } from "./deepseek.ts";
 import { validateFactoryLabelConfiguration } from "../agent/lib/constants.ts";
+import {
+  defaultSessionRepository,
+  parseRepositoryFullName,
+  resolveInstallationRepository,
+} from "../agent/lib/github/session-attachment.ts";
 
 const GITHUB_API_VERSION = "2022-11-28";
 
@@ -46,8 +51,16 @@ export type PreflightResult = {
     appId: string | null;
     installationId: string | null;
     membersPermission: string | null;
+    permissions: Record<string, string>;
     team: string;
     memberCount: number | null;
+    /** Installation coverage for the repository this session would work on. */
+    repository: {
+      fullName: string;
+      ok: boolean;
+      id: number | null;
+      error?: string;
+    };
     error?: string;
   };
   deepSeek: {
@@ -221,17 +234,29 @@ async function checkDeepSeek(
 export async function runPreflight(
   env: Environment = process.env,
   fetchImpl: Fetch = fetch,
-  options: { checkDeepSeek?: boolean; org?: string; team?: string } = {},
+  options: { checkDeepSeek?: boolean; org?: string; team?: string; repository?: string } = {},
 ): Promise<PreflightResult> {
   const checkDeepSeekEnabled = options.checkDeepSeek ?? true;
   const secrets = requiredSecrets(env, checkDeepSeekEnabled);
+  const requestedRepository = options.repository?.trim() || defaultSessionRepository(env);
+  const repositoryFullName = parseRepositoryFullName(requestedRepository);
+  const repository: PreflightResult["githubApp"]["repository"] = {
+    fullName: repositoryFullName ?? requestedRepository,
+    ok: false,
+    id: null,
+  };
+  if (repositoryFullName === null) {
+    repository.error = `invalid-format: ${requestedRepository} is not an owner/name repository`;
+  }
   const githubApp: PreflightResult["githubApp"] = {
     ok: false,
     appId: env.GITHUB_APP_ID ?? null,
     installationId: env.GITHUB_APP_INSTALLATION_ID ?? null,
     membersPermission: null,
+    permissions: {},
     team: `${options.org ?? "wazootech"}/${options.team ?? "team"}`,
     memberCount: null,
+    repository,
   };
 
   const githubMissing = missingSecrets(
@@ -244,6 +269,7 @@ export async function runPreflight(
   } else {
     try {
       const installation = await readInstallationToken(env, fetchImpl);
+      githubApp.permissions = installation.permissions;
       githubApp.membersPermission = installation.permissions.members ?? null;
       if (githubApp.membersPermission !== "read") {
         githubApp.error = `installation token has members permission ${githubApp.membersPermission ?? "none"}, expected read`;
@@ -254,8 +280,23 @@ export async function runPreflight(
           options.team ?? "team",
           fetchImpl,
         );
-        githubApp.ok = true;
       }
+      if (repositoryFullName === null) {
+        githubApp.error ??= repository.error;
+      } else {
+        const resolution = await resolveInstallationRepository({
+          fullName: repositoryFullName,
+          token: installation.token,
+          fetchImpl,
+        });
+        if (resolution.ok) {
+          repository.ok = true;
+          repository.id = resolution.target.id;
+        } else {
+          repository.error = resolution.failure;
+        }
+      }
+      githubApp.ok = githubApp.error === undefined && repository.ok;
     } catch (error) {
       githubApp.error = error instanceof Error ? error.message : "GitHub preflight failed";
     }

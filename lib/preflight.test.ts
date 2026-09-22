@@ -41,8 +41,12 @@ test("proves the installation token carries members read and can read the approv
   const pem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
   const calls: Array<{ url: string; authorization: string }> = [];
   const responses = [
-    new Response(JSON.stringify({ token: "installation-token", permissions: { members: "read" } }), { status: 201 }),
+    new Response(JSON.stringify({ token: "installation-token", permissions: { members: "read", issues: "write" } }), { status: 201 }),
     new Response(JSON.stringify([{ login: "EthanThatOneKid" }]), { status: 200 }),
+    new Response(
+      JSON.stringify({ id: 915, name: "workspace", full_name: "wazootech/workspace", owner: { login: "wazootech" } }),
+      { status: 200 },
+    ),
   ];
 
   const result = await runPreflight(
@@ -70,6 +74,75 @@ test("proves the installation token carries members read and can read the approv
   assert.match(calls[1]?.url ?? "", /teams\/team\/members/);
   assert.match(calls[0]?.authorization ?? "", /^Bearer /);
   assert.equal(calls[1]?.authorization, "Bearer installation-token");
+  // The default session repository is `wazootech/workspace`; coverage is proven
+  // by resolving it through the same installation token as the other checks.
+  assert.equal(result.githubApp.repository.fullName, "wazootech/workspace");
+  assert.equal(result.githubApp.repository.ok, true);
+  assert.equal(result.githubApp.repository.id, 915);
+  assert.match(calls[2]?.url ?? "", /\/repos\/wazootech\/workspace$/);
+  assert.equal(calls[2]?.authorization, "Bearer installation-token");
+});
+
+test("checks an explicitly named repository and reports a missing one legibly", async () => {
+  const responses = [
+    new Response(JSON.stringify({ token: "installation-token", permissions: { members: "read", issues: "write" } }), { status: 201 }),
+    new Response(JSON.stringify([{ login: "EthanThatOneKid" }]), { status: 200 }),
+    new Response(JSON.stringify({ message: "Not Found" }), { status: 404 }),
+  ];
+
+  const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const pem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+  const urls: string[] = [];
+
+  const result = await runPreflight(
+    {
+      GITHUB_APP_ID: "4864396",
+      GITHUB_APP_INSTALLATION_ID: "159856502",
+      GITHUB_APP_PRIVATE_KEY: pem,
+      FACTORY_APPROVAL_SECRET: "approval-secret",
+    },
+    async (input) => {
+      urls.push(String(input));
+      return responses.shift() as Response;
+    },
+    { checkDeepSeek: false, repository: "wazootech/not-covered" },
+  );
+
+  assert.equal(result.githubApp.repository.fullName, "wazootech/not-covered");
+  assert.equal(result.githubApp.repository.ok, false);
+  assert.equal(result.githubApp.repository.error, "not-covered");
+  assert.equal(result.githubApp.ok, false);
+  assert.equal(result.ok, false);
+  assert.match(urls[2] ?? "", /\/repos\/wazootech\/not-covered$/);
+});
+
+test("rejects a malformed repository name instead of asking GitHub about it", async () => {
+  const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const pem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+  const urls: string[] = [];
+  const responses = [
+    new Response(JSON.stringify({ token: "installation-token", permissions: { members: "read" } }), { status: 201 }),
+    new Response(JSON.stringify([{ login: "EthanThatOneKid" }]), { status: 200 }),
+  ];
+
+  const result = await runPreflight(
+    {
+      GITHUB_APP_ID: "4864396",
+      GITHUB_APP_INSTALLATION_ID: "159856502",
+      GITHUB_APP_PRIVATE_KEY: pem,
+      FACTORY_APPROVAL_SECRET: "approval-secret",
+    },
+    async (input) => {
+      urls.push(String(input));
+      return responses.shift() as Response;
+    },
+    { checkDeepSeek: false, repository: "https://github.com/wazootech/workspace" },
+  );
+
+  assert.equal(result.githubApp.repository.fullName, "https://github.com/wazootech/workspace");
+  assert.match(result.githubApp.repository.error ?? "", /invalid-format/);
+  assert.equal(result.ok, false);
+  assert.equal(urls.some((url) => url.includes("/repos/")), false);
 });
 
 test("deepseek probe sends the default model and thinking pin like the agent wiring", async () => {
