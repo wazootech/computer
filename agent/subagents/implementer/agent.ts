@@ -1,5 +1,5 @@
 import { defineAgent } from "eve";
-import { MODELS } from "../../lib/models.js";
+import { MODEL_OPTIONS, MODELS } from "../../lib/models.js";
 
 /**
  * Station 3: implementation.
@@ -17,6 +17,7 @@ export default defineAgent({
   description:
     "Execute an approved implementation plan in a checkout of the factory repository, write code on a feature branch, run the repository checks, commit, and push the branch. Return the branch name, per-file change summary, verification results, and deviations. The caller passes the work item, classification, full analysis, and selected risk-scaled review policy, plus an artifact id when the analyst saved full detail. On revision runs it passes the existing branch and reviewer findings. Use the policy to plan verification depth and call out evidence gaps.",
   model: MODELS.implementer,
+  modelOptions: MODEL_OPTIONS,
   outputSchema: {
     additionalProperties: false,
     properties: {
