@@ -70,24 +70,76 @@ Production deployment uses:
 eve deploy
 ```
 
-The production runtime needs `BETTER_AUTH_SECRET`, `VERCEL_APP_CLIENT_ID`, `VERCEL_APP_CLIENT_SECRET`, `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET`, `FACTORY_APPROVAL_SECRET`, and `DEEPSEEK_API_KEY`.
+The production runtime needs `BETTER_AUTH_SECRET`, `VERCEL_APP_CLIENT_ID`, `VERCEL_APP_CLIENT_SECRET`, `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET`, `FACTORY_APPROVAL_SECRET`, `DEEPSEEK_API_KEY`, `DISCORD_BOT_TOKEN`, and `DISCORD_BRIDGE_SECRET`.
 
 The GitHub channel uses Eve's native GitHub App authentication with the WazooComputer App credentials. It does not require `GITHUB_CONNECTOR`. The GitHub webhook secret authenticates inbound events; the App private key and installation ID authorize GitHub API calls and sandbox egress.
 A direct `@wazootech/computer` invocation is accepted in an issue or pull-request body when it is opened or edited, in issue and pull-request timeline comments, and in inline pull-request review comments. For timeline and review comments, `@wazootech/computer` is the native channel trigger; Eve prefilters those events by one configured `botName`. `@wazoocomputer` and `@wazoocomputer[bot]` remain compatibility aliases for body-based triggers. Direct invocations require the sender to be an active member of the configured approver team.
 
-## Discord channel (staged)
+## Discord channel (internal mentions)
 
-A controlled Discord channel is wired at `agent/channels/discord.ts` on eve's native Discord integration. It is default-deny: without operator configuration the bot never dispatches anywhere, including DMs.
+Computer answers ordinary `@Computer` mentions in the configured internal Discord channel. `/ask` is retired: the slash command, its registration, and the HTTP interaction channel were removed, so a mention is the only way to summon Computer and there is no second interface to keep in sync.
+
+Discord delivers ordinary messages over its Gateway websocket, never to an application's interactions endpoint, so a small always-on worker holds that connection and forwards admitted mentions to the agent's ingress route (`POST /eve/v1/discord-mentions`). Everything that decides anything lives in the deployment:
+
+- `agent/channels/discord-mentions.ts` owns mention sessions. It is default-deny without configuration, verifies the bridge's HMAC signature, re-admits every forward against the deployment's own allowlists, and posts replies back to the originating channel or thread.
+- `bridge/discord-gateway/index.ts` is transport only: one Gateway connection, the same admission policy as a prefilter, a per-user rate limit, duplicate suppression, and reconnect with backoff. It never posts to Discord.
+- `lib/discord-mention-policy.ts` holds the pure admission matrix: mention parsing, allowlist denial, thread-to-parent mapping, self-loop prevention, and hostile-input handling. `lib/discord-policy.ts` remains the tier authority, and `lib/discord-bridge.ts` holds the transport primitives.
 
 Operator setup:
 
-1. Create the Discord application and bot. Either run the guided Connect setup (`pnpm eve add channel/discord`, which stores the bot token in Vercel Connect), or set `DISCORD_APPLICATION_ID`, `DISCORD_BOT_TOKEN`, and `DISCORD_PUBLIC_KEY` as deployment secrets and point the application's Interactions Endpoint URL at `POST /eve/v1/discord`.
-2. Register the `/ask` application command. The guided setup registers it; the manual path is documented in eve's Discord channel docs (`node_modules/eve/docs/channels/discord.mdx`).
-3. Configure the allowlists as deployment environment variables (comma-separated ids): `DISCORD_PUBLIC_GUILD_IDS`, `DISCORD_PUBLIC_CHANNEL_IDS`, `DISCORD_INTERNAL_GUILD_IDS`, `DISCORD_INTERNAL_CHANNEL_IDS`, `DISCORD_INTERNAL_USER_IDS`, `DISCORD_INTERNAL_ROLE_IDS`.
+1. Create the Discord application and bot, and enable the privileged **Message Content** intent in its Bot settings. It is required for `content` to arrive at all; a socket that requests it without the portal toggle is closed with code 4014.
+2. Give the bot a channel permission set that can read and reply: View Channels, Send Messages, Send Messages in Threads, Read Message History, and Embed Links. No administrator permission is needed, and the `applications.commands` scope is no longer required.
+3. Leave the application's **Interactions Endpoint URL unset**. Discord is exclusive here: once a URL is configured, interactions stop arriving on the Gateway, so the approval buttons and modal answers a mention session waits on would go nowhere.
+4. Set the deployment environment (comma-separated ids): `DISCORD_INTERNAL_GUILD_IDS`, `DISCORD_INTERNAL_CHANNEL_IDS`, `DISCORD_INTERNAL_USER_IDS`, `DISCORD_INTERNAL_ROLE_IDS`, plus `DISCORD_BRIDGE_SECRET` and `DISCORD_BOT_TOKEN` (replies are posted with the bot token). No `DISCORD_PUBLIC_KEY` is needed: nothing verifies an inbound interaction signature any more.
+5. Run the bridge on an always-on host, with the same allowlists, the same secret, and the deployment origin:
 
-Policy: the public tier (allowlisted public support channels) is read-only with respect to Wazoo systems and answers from public-safe knowledge only. The internal team tier (allowlisted internal channels plus an allowlisted user or role) may expose approved internal context, with destructive, public, and externally communicative actions still behind approval gates (eve renders HITL confirmations as Discord components). Internal replies are ephemeral, visible only to the invoking user, so internal context does not linger in a shared channel. Admission is computed from the full request context with default deny and fails closed. Public and internal sessions use distinct principals and never share context. A channel id may not appear in both the public and internal allowlists; the environment parser rejects such a configuration at startup.
+```bash
+DISCORD_BOT_TOKEN=... \
+DISCORD_BRIDGE_SECRET=... \
+COMPUTER_BASE_URL=https://wazoocomputer.vercel.app \
+DISCORD_INTERNAL_GUILD_IDS=... \
+DISCORD_INTERNAL_CHANNEL_IDS=... \
+DISCORD_INTERNAL_USER_IDS=... \
+DISCORD_INTERNAL_ROLE_IDS=... \
+pnpm discord:bridge
+```
 
-Operator controls: allowlists change through deployment environment variables, and clearing them (or removing the channel file) silences the bot everywhere. Route health follows the Vercel deployment checks plus the `/eve/v1/discord` interaction route. The admission policy is pure and covered by `pnpm test`. Reconnect handling does not apply in this mode: the channel is webhook-based (no persistent socket), and signature verification plus delivery retries come from eve's native channel runtime.
+Vercel cannot hold the Gateway socket, so the worker needs its own host. It reconnects with exponential backoff, resumes its session, and exits non-zero on a close code that retrying cannot fix (a bad token, sharding, or a disallowed intent).
+
+### Hosting the bridge on Zo Computer
+
+The reference host is a Zo Computer service, because it is always-on, restarts on crash, and can be redeployed from CI. Register it once with `mode: "process"` (no public port) and the deployment environment from step 4:
+
+```text
+label:      computer-discord-bridge
+mode:       process
+workdir:    /home/workspace/users/etok/workspaces/wazootech/repos/computer
+entrypoint: node --experimental-strip-types bridge/discord-gateway/index.ts
+env:        DISCORD_BOT_TOKEN, DISCORD_BRIDGE_SECRET, COMPUTER_BASE_URL,
+            DISCORD_INTERNAL_GUILD_IDS, DISCORD_INTERNAL_CHANNEL_IDS,
+            DISCORD_INTERNAL_USER_IDS, DISCORD_INTERNAL_ROLE_IDS
+```
+
+`scripts/zo-deploy.ts` deploys a new revision over Zo's MCP endpoint (`api.zo.computer/mcp`), which needs no open ports on the host:
+
+```bash
+ZO_API_KEY=... pnpm discord:deploy --service computer-discord-bridge --dir /path/to/computer
+```
+
+It fast-forwards the checkout with `git pull --ff-only`, restarts the service by id, and then waits for the bridge's own `gateway ready` line in `service_doctor` before it reports success. Each step is safe to repeat, and a failed pull aborts before the restart, so a broken deploy leaves the previous process running. `--dry-run` resolves the service without restarting anything.
+
+`.github/workflows/deploy.yml` runs that script on every push to `main` that touches the bridge or its libraries, serialized and never cancelled. It needs one repository secret and, optionally, two variables:
+
+- `ZO_API_KEY` — a Zo access token from Zo Computer's Settings, under Advanced, in the Access Tokens area. Until it is set, the workflow warns and skips instead of failing.
+- `vars.ZO_SERVICE` / `vars.ZO_SERVICE_DIRECTORY` — override the service label or the live checkout path.
+
+The restart is graceful: the bridge closes its socket and exits 0 on `SIGTERM`, and Discord replays the events a resumed session missed, so a deploy does not drop a mention. Vercel deploys the agent side of the same push, so a mention that arrives mid-deploy waits for the ingress route instead of failing.
+
+Policy: admission is default deny and fails closed. A message dispatches only when it arrives in the internal guild, in an allowlisted channel (or in a thread whose parent channel is allowlisted), from an allowlisted user or role, from a person rather than a bot or webhook, and with an explicit `@Computer` mention that leaves a non-empty request. Mention text is untrusted input: it cannot change the allowlists, permissions, approval policy, or these instructions, invisible and bidirectional characters are stripped before the model sees it, and an over-long message is truncated rather than dispatched whole. Replies never ping anyone (`allowed_mentions: {parse: []}`), and the bridge ignores every bot-authored message, so a self-mention loop cannot start. Public and customer-service mentions are deferred: a public-allowlisted channel never starts a mention turn.
+
+Sessions are keyed to the guild and to the channel or thread, so a thread never shares context with its parent channel and one channel never shares with another. Replies land where the mention came from, with the same approval gates the web and GitHub channels use; an approval renders as Discord buttons and the click is answered over the same Gateway connection. The transport knobs are `DISCORD_BRIDGE_RATE_LIMIT` and `DISCORD_BRIDGE_RATE_WINDOW_MS` (6 per user per 60s by default), `DISCORD_BRIDGE_MAX_IN_FLIGHT` (4), and `DISCORD_BRIDGE_QUEUE_LIMIT` (25).
+
+Operator controls: allowlists and secrets live in deployment environment variables, stopping the bridge silences mentions everywhere, and the admission matrix plus the transport primitives are covered by `pnpm test`.
 
 ## Validation
 

@@ -3,8 +3,9 @@
  * default-deny, fail-closed semantics.
  *
  * Pure and dependency-free so the admission matrix is directly testable. The
- * channel layer (agent/channels/discord.ts) maps the resolved tier onto the
- * eve session auth context; no tier decision lives there.
+ * mention policy (lib/discord-mention-policy.ts) calls into it and the channel
+ * layer (agent/channels/discord-mentions.ts) maps the resolved tier onto the
+ * eve session auth context; no tier decision lives in the channel.
  */
 
 export type DiscordTier = "public" | "internal";
