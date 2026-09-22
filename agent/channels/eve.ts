@@ -4,6 +4,11 @@ import type { SessionAuthContext } from "eve/context";
 import { auth } from "@/lib/auth";
 import { mintInstallationToken } from "#lib/github/app-token.js";
 import {
+  linkedGithubAccountId,
+  resolveApproverLogin,
+  stampGithubLogin,
+} from "#lib/github/approver-login.js";
+import {
   attachSessionRepository,
   createSessionRepositoryResolver,
   sessionRepositoryNotice,
@@ -62,8 +67,51 @@ function withRepository(authFn: AuthFn<Request>): AuthFn<Request> {
     (await attachSessionRepository((await authFn(request)) ?? null, request, { resolve: resolveSessionRepository })).auth;
 }
 
+/**
+ * Attributes the session's write approvals to a verified GitHub login.
+ *
+ * The GitHub channel stamps the event sender's login, so its approvals resolve.
+ * A chat session has no sender: the person's linked GitHub account is the only
+ * verified login, so it is resolved against the approver-team roster and stamped
+ * as `githubLogin`, which is the attribute the approval responder check reads. A
+ * login that is not on the team is not stamped at all, so the approval is
+ * rejected with a legible reason rather than attributed to the wrong person.
+ */
+async function linkedApproverLogin(request: Request): Promise<string | null> {
+  let accounts: unknown;
+  try {
+    accounts = await auth.api.listUserAccounts({ headers: request.headers });
+  } catch {
+    return null;
+  }
+  return resolveApproverLogin({
+    accountId: linkedGithubAccountId(accounts),
+    mintToken: mintInstallationToken,
+  });
+}
+
+function withApproverLogin(authFn: AuthFn<Request>): AuthFn<Request> {
+  return async (request) => {
+    const authorization = (await authFn(request)) ?? null;
+    if (authorization === null || authorization.principalType !== "user") return authorization;
+    const login = await linkedApproverLogin(request);
+    return login === null ? authorization : stampGithubLogin(authorization, login);
+  };
+}
+
+/**
+ * The nesting order is the substance of the composition: `withApproverLogin`
+ * must stay outside `withRepository`, so the stamped login is applied after the
+ * repository attachment rather than being replaced by it. Inverting the two
+ * wrappers silently drops `githubLogin` and every chat approval fails again, so
+ * `lib/channel-composition.test.ts` asserts the order.
+ */
 export default eveChannel({
-  auth: [withRepository(betterAuthSession), withRepository(vercelOidc()), withRepository(localDevUser)],
+  auth: [
+    withApproverLogin(withRepository(betterAuthSession)),
+    withRepository(vercelOidc()),
+    withRepository(localDevUser),
+  ],
   async onMessage(ctx) {
     const caller: SessionAuthContext | null = ctx.eve.caller;
     const notice = sessionRepositoryNotice(caller);
