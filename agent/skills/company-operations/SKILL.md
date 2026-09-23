@@ -1,6 +1,6 @@
 ---
 name: company-operations
-description: Use when the user invokes `/company` or asks for company validation, planning, building, branding, launch, growth, or recurring operating reviews. This is Computer's company-operations planning workflow.
+description: Use when the user invokes `/company` or asks for company validation, planning, branding, launch, growth, recurring operating reviews, or building a company or product. This is Computer's company-operations planning workflow.
 ---
 
 # Company operating workflow
