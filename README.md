@@ -106,7 +106,7 @@ Operator setup:
 1. Create the Discord application and bot, and enable the privileged **Message Content** intent in its Bot settings. It is required for `content` to arrive at all; a socket that requests it without the portal toggle is closed with code 4014.
 2. Give the bot a channel permission set that can read and reply: View Channels, Send Messages, Send Messages in Threads, Read Message History, and Embed Links. No administrator permission is needed, and the `applications.commands` scope is no longer required.
 3. Leave the application's **Interactions Endpoint URL unset**. Discord is exclusive here: once a URL is configured, interactions stop arriving on the Gateway, so the approval buttons and modal answers a mention session waits on would go nowhere.
-4. Set the deployment environment (comma-separated ids): `DISCORD_INTERNAL_GUILD_IDS`, `DISCORD_INTERNAL_CHANNEL_IDS`, `DISCORD_INTERNAL_USER_IDS`, `DISCORD_INTERNAL_ROLE_IDS`, plus `DISCORD_BRIDGE_SECRET` and `DISCORD_BOT_TOKEN` (replies are posted with the bot token). No `DISCORD_PUBLIC_KEY` is needed: nothing verifies an inbound interaction signature any more.
+4. Set the deployment environment (comma-separated ids): `DISCORD_INTERNAL_GUILD_IDS`, `DISCORD_INTERNAL_CHANNEL_IDS`, `DISCORD_INTERNAL_USER_IDS`, `DISCORD_INTERNAL_ROLE_IDS`, plus `DISCORD_BRIDGE_SECRET` and `DISCORD_BOT_TOKEN` (replies are posted with the bot token). Set `DISCORD_INTERNAL_GUILD_WIDE=1` to let an allowlisted operator mention the bot in any channel of an allowlisted guild, not only in the allowlisted channels; the guild allowlist and the user/role allowlist still both apply, so a shared or public server stays closed. No `DISCORD_PUBLIC_KEY` is needed: nothing verifies an inbound interaction signature any more.
 5. Run the bridge on an always-on host, with the same allowlists, the same secret, and the deployment origin:
 
 ```bash
@@ -117,6 +117,7 @@ DISCORD_INTERNAL_GUILD_IDS=... \
 DISCORD_INTERNAL_CHANNEL_IDS=... \
 DISCORD_INTERNAL_USER_IDS=... \
 DISCORD_INTERNAL_ROLE_IDS=... \
+DISCORD_INTERNAL_GUILD_WIDE=1 \
 pnpm discord:bridge
 ```
 
