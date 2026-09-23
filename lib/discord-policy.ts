@@ -25,6 +25,13 @@ export interface DiscordPolicyConfig {
   readonly internalChannelIds: readonly string[];
   readonly internalUserIds: readonly string[];
   readonly internalRoleIds: readonly string[];
+  /**
+   * Admit an allowlisted operator in any channel of an allowlisted guild, so a
+   * mention from someone with the operator role works wherever the bot can
+   * read, not only in the allowlisted channels. The guild allowlist and the
+   * user/role allowlist still both apply.
+   */
+  readonly internalGuildWide?: boolean;
 }
 
 export type DiscordAccess =
@@ -40,6 +47,12 @@ export function parseIdList(raw: string | undefined): string[] {
     .filter((id) => id.length > 0);
 }
 
+/** Parse a boolean switch from the environment. Only "1" and "true" turn it on. */
+export function parseFlag(raw: string | undefined): boolean {
+  const value = raw?.trim().toLowerCase();
+  return value === "1" || value === "true";
+}
+
 export function discordPolicyConfigFromEnv(env: NodeJS.ProcessEnv = process.env): DiscordPolicyConfig {
   const config = {
     publicGuildIds: parseIdList(env.DISCORD_PUBLIC_GUILD_IDS),
@@ -48,6 +61,7 @@ export function discordPolicyConfigFromEnv(env: NodeJS.ProcessEnv = process.env)
     internalChannelIds: parseIdList(env.DISCORD_INTERNAL_CHANNEL_IDS),
     internalUserIds: parseIdList(env.DISCORD_INTERNAL_USER_IDS),
     internalRoleIds: parseIdList(env.DISCORD_INTERNAL_ROLE_IDS),
+    internalGuildWide: parseFlag(env.DISCORD_INTERNAL_GUILD_WIDE),
   };
   // Fail fast on the one misconfiguration that would otherwise depend on code
   // order: a channel id in both tier allowlists would silently demote internal
@@ -75,7 +89,11 @@ function isGuildAllowlisted(guildId: string | undefined, guildIds: readonly stri
  *   with respect to Wazoo systems and public-safe knowledge only.
  * - Internal tier: guild and channel on the internal allowlist AND the user
  *   id or at least one role on the internal operator lists. Neither the
- *   channel alone nor a role alone grants access.
+ *   channel alone nor a role alone grants access. With `internalGuildWide`
+ *   set, an allowlisted guild plus an allowlisted user or role is enough and
+ *   the channel allowlist is not consulted, so an operator mention works
+ *   wherever the bot can read. The guild and operator allowlists still both
+ *   apply, and a DM stays denied because it carries no guild id.
  *
  * The returned principal ids differ per tier, so public and internal sessions
  * never share a principal, and every emitted attribute set carries its tier.
@@ -97,6 +115,14 @@ export function resolveDiscordAccess(
 
   const userAllowed = config.internalUserIds.includes(request.userId);
   const roleAllowed = request.memberRoleIds.some((roleId) => config.internalRoleIds.includes(roleId));
+  if (
+    config.internalGuildWide &&
+    isGuildAllowlisted(request.guildId, config.internalGuildIds) &&
+    (userAllowed || roleAllowed)
+  ) {
+    return { tier: "internal", principalId: `discord-team:${request.userId}` };
+  }
+
   if (
     isGuildAllowlisted(request.guildId, config.internalGuildIds) &&
     config.internalChannelIds.includes(request.channelId) &&

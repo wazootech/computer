@@ -107,7 +107,7 @@ describe("resolveDiscordAccess", () => {
 });
 
 describe("discordPolicyConfigFromEnv", () => {
-  it("reads the six allowlists from the environment", () => {
+  it("reads the six allowlists and the guild-wide flag from the environment", () => {
     const parsed = discordPolicyConfigFromEnv({
       NODE_ENV: "development",
       DISCORD_PUBLIC_GUILD_IDS: "g1",
@@ -124,6 +124,17 @@ describe("discordPolicyConfigFromEnv", () => {
       internalChannelIds: ["c3"],
       internalUserIds: ["u1"],
       internalRoleIds: ["r1", "r2"],
+      internalGuildWide: false,
     });
+  });
+
+  it("turns guild-wide admission on only for an explicit truthy flag", () => {
+    const base = { NODE_ENV: "development" as const, DISCORD_INTERNAL_GUILD_IDS: "g1", DISCORD_INTERNAL_ROLE_IDS: "r1" };
+    for (const on of ["1", "true", "TRUE", " true "]) {
+      assert.equal(discordPolicyConfigFromEnv({ ...base, DISCORD_INTERNAL_GUILD_WIDE: on }).internalGuildWide, true);
+    }
+    for (const off of [undefined, "", "0", "false", "no", "on", "yes", "banana"]) {
+      assert.equal(discordPolicyConfigFromEnv({ ...base, DISCORD_INTERNAL_GUILD_WIDE: off }).internalGuildWide, false);
+    }
   });
 });
