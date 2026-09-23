@@ -16,8 +16,6 @@
     "test": "node --test lib/*.test.ts",
     "discord:bridge": "node --experimental-strip-types bridge/discord-gateway/index.ts",
     "discord:deploy": "node --experimental-strip-types scripts/zo-deploy.ts",
-    "export:agent-file": "node --experimental-strip-types scripts/export-agent-file.ts --manifest .eve/agent-summary.json",
-    "check:agent-file": "node --experimental-strip-types scripts/export-agent-file.ts --manifest .eve/agent-summary.json --check",
     "build:eve": "eve build",
     "dev:eve": "eve dev",
     "start:eve": "eve start",

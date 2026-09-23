@@ -4,10 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-overrides:
-  '@github-tools/eve-extension>eve': 0.52.3
-  '@github-tools/sdk>eve': 0.52.3
-
 importers:
 
   .:
@@ -279,7 +275,7 @@ packages:
       '@vercel/connect': '>=0.3.2'
       '@workflow/ai': ^4.1.2
       ai: ^6.0.97 || ^7.0.0
-      eve: 0.52.3
+      eve: '>=0.44.0 <0.48.0'
       workflow: ^4.5.0
       zod: ^4.3.6
     peerDependenciesMeta:
