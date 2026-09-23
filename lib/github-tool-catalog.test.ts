@@ -166,25 +166,3 @@ test("the projected write flag is exactly the set this repository gates behind a
     );
   }
 });
-
-/**
- * Data's declaration is the read-only claim for the second agent (#72). It is
- * asserted here rather than trusted: a write tool added to that list would
- * silently give a support agent a repository write path.
- */
-test("Data's declared surface is read-only", () => {
-  const declaration = JSON.parse(
-    readFileSync(join(process.cwd(), "agents", "data", "agent", "agent-file-declaration.json"), "utf8"),
-  ) as { tools: string[] };
-
-  const surface = githubToolSurface({
-    toolsDir: TOOLS_DIR,
-    agentDirLabel: "agent",
-    declarationsDir: resolveGithubSdkDeclarationsDir(),
-    writeToolNames: WRITE_TOOL_NAMES,
-    only: declaration.tools,
-  });
-
-  assert.equal(surface.length, declaration.tools.length);
-  for (const entry of surface) assert.equal(entry.write, false, `${entry.name} is a write tool`);
-});

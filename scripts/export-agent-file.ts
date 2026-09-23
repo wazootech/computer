@@ -17,20 +17,18 @@ import { GITHUB_WRITE_TOOLS } from "@github-tools/sdk/eve-runtime";
 /**
  * Export the Agent File (`.af`) projection of an agent.
  *
- * Two input modes, one projection:
+ * One input mode: a compiled eve manifest.
  *
  *   --manifest <path>   A compiled eve manifest (`.eve/agent-summary.json`).
  *                       Authoritative for the prompt and the bound tool
  *                       surface, and the model handle is cross-checked against
- *                       the declaration. This is how Computer exports.
+ *                       the declaration. This is how Computer exports, and the
+ *                       only projection this repository publishes. An agent
+ *                       with no eve build projects its own file in its own
+ *                       repository.
  *   --tool-bindings <d> The repository-relative directory holding the authored
  *                       `github__*.ts` bindings (default `agent`). Both the
  *                       glob and the exported source paths use it.
- *   --source <dir>      An agent directory with no eve build: `instructions.md`
- *                       plus the declaration (which then must list the tool
- *                       surface). This is how an agent that has not been
- *                       compiled yet — Data — exports, so its `.af` is still
- *                       generated from source rather than hand-written.
  *
  * Nothing here reads generated output back into `agent/`: the direction is
  * source -> `.af`, always.
@@ -85,39 +83,15 @@ async function readSkills(agentDir: string, agentDirLabel: string) {
 }
 
 /**
- * The GitHub tool names an agent declares when it has no eve build to read them
- * from. Names only: descriptions and the read/write split are resolved from the
- * SDK, so a declaration cannot drift from the installed tool surface.
+ * The GitHub surface as `.af` tools: the whole surface the repository
+ * actually binds.
  */
-function declaredGithubToolNames(declarationRaw: Record<string, unknown>, path: string): string[] | null {
-  const tools = declarationRaw.tools;
-  if (tools === undefined) return null;
-  if (!Array.isArray(tools)) throw new Error(`${path}.tools must be an array when present`);
-  return tools.map((entry, index) => {
-    const at = `${path}.tools[${index}]`;
-    const name = typeof entry === "string" ? entry : isRecord(entry) ? entry.name : undefined;
-    if (typeof name !== "string" || name.length === 0) {
-      throw new Error(`${at} must be a GitHub tool name, or an object with a name`);
-    }
-    return name;
-  });
-}
-
-/**
- * The GitHub surface as `.af` tools. `only` restricts it to a declared subset
- * (the read-only set an agent with no eve build is allowed to call); `null`
- * means the whole surface the repository actually binds.
- */
-async function readGithubSurface(
-  options: { toolBindingsDir: string },
-  only: readonly string[] | null,
-): Promise<AgentFileToolInput[]> {
+async function readGithubSurface(options: { toolBindingsDir: string }): Promise<AgentFileToolInput[]> {
   const surface = githubToolSurface({
     toolsDir: resolve(options.toolBindingsDir, "tools"),
     agentDirLabel: options.toolBindingsDir,
     declarationsDir: resolveGithubSdkDeclarationsDir(),
     writeToolNames: Object.keys(GITHUB_WRITE_TOOLS),
-    ...(only === null ? {} : { only }),
   });
   return surface.map((entry) => ({
     name: entry.boundName,
@@ -141,10 +115,9 @@ function instructionsFromManifest(manifest: Record<string, unknown>, manifestPat
   return parts.join("\n\n");
 }
 
-async function buildSource(options: {
+async function buildProjection(options: {
   repositoryUrl: string;
-  manifestPath: string | null;
-  sourceDir: string | null;
+  manifestPath: string;
   agentDir: string;
   agentDirLabel: string;
   declarationPath: string;
@@ -154,92 +127,69 @@ async function buildSource(options: {
    * an agent whose own directory is elsewhere still points at files that exist.
    */
   toolBindingsDir: string;
-  /** Bare GitHub tool names this agent may call; null means the whole bound surface. */
-  githubTools: readonly string[] | null;
 }): Promise<AgentFileSource> {
   const declarationRaw = await readJsonFile(options.declarationPath);
   if (!isRecord(declarationRaw)) throw new Error(`${options.declarationPath} must be a JSON object`);
   const declaration = parseAgentFileDeclaration(declarationRaw);
   const skills = await readSkills(options.agentDir, options.agentDirLabel);
 
-  if (options.manifestPath !== null) {
-    const manifest = await readJsonFile(options.manifestPath);
-    if (!isRecord(manifest)) throw new Error(`${options.manifestPath} must be a JSON object`);
-    const agent = manifest.agent;
-    if (!isRecord(agent) || typeof agent.modelId !== "string") {
-      throw new Error(`${options.manifestPath}.agent.modelId must be a string`);
-    }
-    if (agent.modelId !== declaration.model.handle) {
-      throw new Error(
-        `model drift: the compiled agent runs ${agent.modelId} but agent/agent-file-declaration.json declares ${declaration.model.handle}`,
-      );
-    }
-    const toolsRaw = manifest.tools;
-    if (!Array.isArray(toolsRaw)) throw new Error(`${options.manifestPath}.tools must be an array`);
-    const tools: AgentFileToolInput[] = toolsRaw.map((entry, index) => {
-      if (!isRecord(entry) || typeof entry.name !== "string" || typeof entry.description !== "string") {
-        throw new Error(`${options.manifestPath}.tools[${index}] must carry a name and description`);
-      }
-      const logicalPath = typeof entry.logicalPath === "string" ? entry.logicalPath : null;
-      return {
-        name: entry.name,
-        description: entry.description,
-        sourcePath: logicalPath === null ? null : posix.join(options.agentDirLabel, logicalPath),
-      };
-    });
-
-    // The manifest lists only statically bound tools. The GitHub surface is
-    // bound per session, so it is recovered from the authored binding files and
-    // is part of the declared surface, never an afterthought.
-    const bound = await readGithubSurface(options, options.githubTools);
-    return {
-      declaration,
-      instructions: instructionsFromManifest(manifest, options.manifestPath),
-      tools: [...tools, ...bound],
-      skills,
-      repositoryUrl: options.repositoryUrl,
-      projectPath: options.agentDirLabel,
-      projectionMode: "eve-manifest",
-    };
+  const manifest = await readJsonFile(options.manifestPath);
+  if (!isRecord(manifest)) throw new Error(`${options.manifestPath} must be a JSON object`);
+  const agent = manifest.agent;
+  if (!isRecord(agent) || typeof agent.modelId !== "string") {
+    throw new Error(`${options.manifestPath}.agent.modelId must be a string`);
   }
+  if (agent.modelId !== declaration.model.handle) {
+    throw new Error(
+      `model drift: the compiled agent runs ${agent.modelId} but agent/agent-file-declaration.json declares ${declaration.model.handle}`,
+    );
+  }
+  const toolsRaw = manifest.tools;
+  if (!Array.isArray(toolsRaw)) throw new Error(`${options.manifestPath}.tools must be an array`);
+  const tools: AgentFileToolInput[] = toolsRaw.map((entry, index) => {
+    if (!isRecord(entry) || typeof entry.name !== "string" || typeof entry.description !== "string") {
+      throw new Error(`${options.manifestPath}.tools[${index}] must carry a name and description`);
+    }
+    const logicalPath = typeof entry.logicalPath === "string" ? entry.logicalPath : null;
+    return {
+      name: entry.name,
+      description: entry.description,
+      sourcePath: logicalPath === null ? null : posix.join(options.agentDirLabel, logicalPath),
+    };
+  });
 
-  if (options.sourceDir === null) throw new Error("pass either --manifest or --source");
-  const instructionsPath = join(options.sourceDir, "instructions.md");
-  if (!existsSync(instructionsPath)) throw new Error(`${instructionsPath} does not exist`);
-
+  // The manifest lists only statically bound tools. The GitHub surface is
+  // bound per session, so it is recovered from the authored binding files and
+  // is part of the declared surface, never an afterthought.
+  const bound = await readGithubSurface(options);
   return {
     declaration,
-    instructions: await readFile(instructionsPath, "utf8"),
-    tools: await readGithubSurface(options, declaredGithubToolNames(declarationRaw, options.declarationPath)),
+    instructions: instructionsFromManifest(manifest, options.manifestPath),
+    tools: [...tools, ...bound],
     skills,
     repositoryUrl: options.repositoryUrl,
     projectPath: options.agentDirLabel,
-    projectionMode: "source",
+    projectionMode: "eve-manifest",
   };
 }
 
 async function main(): Promise<void> {
   const repositoryUrl = option("repository") ?? "https://github.com/wazootech/computer";
-  const manifestPath = option("manifest") === undefined ? null : resolve(option("manifest") as string);
-  const sourceDir = option("source") === undefined ? null : resolve(option("source") as string);
+  const manifestPath = resolve(option("manifest") ?? ".eve/agent-summary.json");
   const agentDirLabel = option("agent-dir") ?? "agent";
-  const agentDir = resolve(sourceDir ?? agentDirLabel);
+  const agentDir = resolve(agentDirLabel);
   const declarationPath = resolve(option("declaration") ?? join(agentDir, "agent-file-declaration.json"));
   const toolBindingsDir = option("tool-bindings") ?? "agent";
   const outputPath = resolve(option("out") ?? "agents/@wazootech/computer/computer.af");
   const checkOnly = process.argv.includes("--check");
 
-  const source = await buildSource({
+  const source = await buildProjection({
     repositoryUrl,
     manifestPath,
-    sourceDir,
     agentDir,
     agentDirLabel,
     declarationPath,
     toolBindingsDir,
-    // A compiled agent binds the whole GitHub surface it ships; an agent with no
-    // eve build declares the subset it may call, in its declaration.
-    githubTools: null,
   });
   const file = projectAgentFile(source);
   const serialized = serializeAgentFile(file);
