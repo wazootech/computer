@@ -25,6 +25,7 @@ on:
       - "lib/discord-mention-policy.ts"
       - "lib/discord-policy.ts"
       - "lib/discord-text.ts"
+      - "lib/host-secrets.ts"
       - "lib/zo-deploy.ts"
       - "scripts/zo-deploy.ts"
       - "package.json"
