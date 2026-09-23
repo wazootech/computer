@@ -50,6 +50,19 @@ import {
 } from "../../lib/discord-bridge.ts";
 import { discordPolicyConfigFromEnv } from "../../lib/discord-policy.ts";
 import { readDiscordMentionEvent, resolveDiscordMentionAdmission } from "../../lib/discord-mention-policy.ts";
+import { loadHostSecrets } from "../../lib/host-secrets.ts";
+
+// A managed service starts from a bare environment: it inherits neither the
+// host shell nor the deployment's Vercel variables, which are stored as secrets
+// and cannot be read back. Fill the bot token and the shared bridge secret from
+// the host's secrets file before anything reads the environment, so the service
+// definition never has to carry them.
+const hostSecrets = loadHostSecrets();
+if (hostSecrets.skipped) {
+  console.log(`no host secrets at ${hostSecrets.path}; using the environment as given`);
+} else if (hostSecrets.loaded.length > 0) {
+  console.log(`loaded ${String(hostSecrets.loaded.length)} secret(s) from ${hostSecrets.path}`);
+}
 
 const DISCORD_API_BASE = "https://discord.com/api/v10";
 const GATEWAY_INTENTS = DISCORD_GATEWAY_INTENTS;
