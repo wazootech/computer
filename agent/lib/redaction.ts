@@ -2,7 +2,7 @@ const redactText = (text: string): string => text
   .replace(/-----BEGIN [^-]+-----[\s\S]*?-----END [^-]+-----/gu, "[REDACTED_PEM]")
   .replace(/(authorization\s*[:=]\s*bearer\s+)[^\s,;]+/giu, "$1[REDACTED]")
   .replace(/\b(?:ghp|gho|ghu|ghs|ghr|github_pat|sk|xoxb|xoxp)-[A-Za-z0-9_-]+\b/gu, "[REDACTED_TOKEN]")
-  .replace(/\b(GITHUB_APP_PRIVATE_KEY|GITHUB_WEBHOOK_SECRET|DEEPSEEK_API_KEY|FACTORY_APPROVAL_SECRET)\s*[:=]\s*[^\s,;]+/gu, (_, name: string) => `${name}=[REDACTED]`);
+  .replace(/\b(GITHUB_APP_PRIVATE_KEY|GITHUB_WEBHOOK_SECRET|DEEPSEEK_API_KEY|AI_GATEWAY_API_KEY|FACTORY_APPROVAL_SECRET)\s*[:=]\s*[^\s,;]+/gu, (_, name: string) => `${name}=[REDACTED]`);
 
 export function redact(value: unknown): unknown {
   if (typeof value === "string") return redactText(value);

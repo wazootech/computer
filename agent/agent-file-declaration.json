@@ -3,17 +3,17 @@
   "agentName": "computer",
   "agentDescription": "Computer is Wazoo Technologies' general assistant. It answers whatever the team brings it, and runs engineering work from a GitHub issue or pull request through a station pipeline, reporting evidence back on the originating thread.",
   "model": {
-    "provider": "deepseek",
-    "model": "deepseek-flash",
+    "provider": "vercel-ai-gateway",
+    "model": "deepseek/deepseek-v4.1-flash",
     "handle": "deepseek/deepseek-v4.1-flash",
-    "modelNote": "The framework handle is deepseek/deepseek-flash; the provider API id is deepseek-flash (DeepSeek-V4.1-Flash). enable_reasoner is false because the runtime pins thinking off by default (lib/deepseek.ts, DEFAULT_DEEPSEEK_THINKING).",
-    "endpoint": "https://api.deepseek.com",
-    "endpointType": "deepseek",
+    "modelNote": "The handle is the Vercel AI Gateway id, not a provider API id: the gateway resolves deepseek/deepseek-v4.1-flash to one of its upstream providers and fails over to another provider serving the same model. The runtime credential is AI_GATEWAY_API_KEY (or Vercel's injected VERCEL_OIDC_TOKEN), so the file never names a per-provider key. enable_reasoner is false because the runtime pins thinking off by default (lib/gateway.ts, DEFAULT_DEEPSEEK_THINKING), and the pin travels as the provider option providerOptions.deepseek.thinking.",
+    "endpoint": "https://ai-gateway.vercel.sh",
+    "endpointType": "openai",
     "contextWindow": 1048576,
     "maxTokens": null,
     "reasoning": false,
     "temperature": 1,
-    "contextWindowSource": "https://api-docs.deepseek.com (DeepSeek-V4.1-Flash: 1M-token context, 384K max output)"
+    "contextWindowSource": "https://api-docs.deepseek.com (the routed model, DeepSeek-V4.1-Flash: 1M-token context, 384K max output; the gateway does not change the model's window)"
   },
   "blocks": [
     {
@@ -108,7 +108,7 @@
     },
     {
       "name": "github__getCiFailureContext",
-      "description": "Diagnose CI failures for a ref \u2014 combined status, failing checks, and failed workflow jobs in one call.",
+      "description": "Diagnose CI failures for a ref — combined status, failing checks, and failed workflow jobs in one call.",
       "sourcePath": "agent/tools/github__getCiFailureContext.ts"
     },
     {

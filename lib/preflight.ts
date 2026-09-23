@@ -1,11 +1,12 @@
 import { createSign } from "node:crypto";
 
 import {
-  DEFAULT_DEEPSEEK_BASE_URL,
-  DEFAULT_DEEPSEEK_MODEL,
-  resolveDeepSeekModel,
+  GATEWAY_BASE_URL,
+  modelProviderOptions,
   resolveDeepSeekThinking,
-} from "./deepseek.ts";
+  resolveGatewayCredential,
+  resolveGatewayModel,
+} from "./gateway.ts";
 import { validateFactoryLabelConfiguration } from "../agent/lib/constants.ts";
 import {
   defaultSessionRepository,
@@ -63,10 +64,10 @@ export type PreflightResult = {
     };
     error?: string;
   };
-  deepSeek: {
+  model: {
     ok: boolean;
     skipped?: boolean;
-    model: string;
+    id: string;
     status: number | null;
     error?: string;
   };
@@ -95,15 +96,18 @@ function createAppJwt(appId: string, privateKey: string): string {
   return `${unsigned}.${base64Url(signer.sign(privateKey.replaceAll("\\n", "\n")))}`;
 }
 
-function requiredSecrets(env: Environment, includeDeepSeek: boolean): SecretStatus {
+function requiredSecrets(env: Environment, includeModel: boolean): SecretStatus {
   const names = [
     "GITHUB_APP_ID",
     "GITHUB_APP_INSTALLATION_ID",
     "GITHUB_APP_PRIVATE_KEY",
     "FACTORY_APPROVAL_SECRET",
   ];
-  if (includeDeepSeek) names.push("DEEPSEEK_API_KEY");
-  return Object.fromEntries(names.map((name) => [name, Boolean(env[name]?.trim())]));
+  const status = Object.fromEntries(names.map((name) => [name, Boolean(env[name]?.trim())]));
+  // One logical gateway credential: either accepted variable satisfies it, so
+  // an OIDC-only deployment does not read as a missing secret.
+  if (includeModel) status.GATEWAY_CREDENTIAL = resolveGatewayCredential(env) !== null;
+  return status;
 }
 
 function missingSecrets(status: SecretStatus): string[] {
@@ -178,22 +182,26 @@ async function readTeamMemberCount(
   return count;
 }
 
-async function checkDeepSeek(
+async function checkGatewayModel(
   env: Environment,
   fetchImpl: Fetch,
-): Promise<PreflightResult["deepSeek"]> {
-  const model = resolveDeepSeekModel(env);
-  const apiKey = env.DEEPSEEK_API_KEY;
-  if (!apiKey?.trim()) {
-    return { ok: false, model, status: null, error: "DEEPSEEK_API_KEY is missing" };
+): Promise<PreflightResult["model"]> {
+  const model = resolveGatewayModel(env);
+  const credential = resolveGatewayCredential(env);
+  if (credential === null) {
+    return {
+      ok: false,
+      id: model,
+      status: null,
+      error: "AI_GATEWAY_API_KEY and VERCEL_OIDC_TOKEN are both missing",
+    };
   }
 
-  const baseUrl = env.DEEPSEEK_BASE_URL?.trim() || DEFAULT_DEEPSEEK_BASE_URL;
   try {
-    const response = await fetchImpl(`${baseUrl.replace(/\/$/u, "")}/chat/completions`, {
+    const response = await fetchImpl(`${GATEWAY_BASE_URL}/v1/chat/completions`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${credential.value}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -202,42 +210,58 @@ async function checkDeepSeek(
         max_tokens: 4,
         temperature: 0,
         // Mirror the agent wiring (agent/lib/models.ts) so preflight proves
-        // the exact request shape the agent will send — including the
-        // thinking-mode pin, without which V4.1-Flash's default (thinking
+        // the exact request shape the agent will send, including the
+        // thinking-mode pin, without which the provider default (thinking
         // ON) would make preflight validate a different behavior.
-        thinking: { type: resolveDeepSeekThinking(env) },
+        ...modelProviderOptions(resolveDeepSeekThinking(env)).providerOptions,
       }),
     });
     if (!response.ok) {
       return {
         ok: false,
-        model,
+        id: model,
         status: response.status,
-        error: `DeepSeek request returned HTTP ${response.status}`,
+        // 401/403 are the two credential-path failures worth naming: an
+        // unusable key versus a gateway account that cannot reach this model.
+        error: resolveGatewayFailure(response.status),
       };
     }
     const body = (await response.json()) as { choices?: unknown[] };
     if (!Array.isArray(body.choices) || body.choices.length === 0) {
-      return { ok: false, model, status: response.status, error: "DeepSeek response omitted choices" };
+      return { ok: false, id: model, status: response.status, error: "gateway response omitted choices" };
     }
-    return { ok: true, model, status: response.status };
+    return { ok: true, id: model, status: response.status };
   } catch {
     return {
       ok: false,
-      model,
+      id: model,
       status: null,
-      error: "DeepSeek request failed before receiving a response",
+      error: "gateway request failed before receiving a response",
     };
   }
+}
+
+/**
+ * Names the two credential-path failures a gateway call can hit, so a broken
+ * agent reports which one it is instead of a bare status code.
+ */
+export function resolveGatewayFailure(status: number): string {
+  if (status === 401) {
+    return "gateway rejected the credential (HTTP 401): the gateway key or OIDC token is invalid";
+  }
+  if (status === 403) {
+    return "gateway refused this model for the account (HTTP 403): the model requires purchased AI Gateway credits";
+  }
+  return `gateway request returned HTTP ${status}`;
 }
 
 export async function runPreflight(
   env: Environment = process.env,
   fetchImpl: Fetch = fetch,
-  options: { checkDeepSeek?: boolean; org?: string; team?: string; repository?: string } = {},
+  options: { checkModel?: boolean; org?: string; team?: string; repository?: string } = {},
 ): Promise<PreflightResult> {
-  const checkDeepSeekEnabled = options.checkDeepSeek ?? true;
-  const secrets = requiredSecrets(env, checkDeepSeekEnabled);
+  const checkModelEnabled = options.checkModel ?? true;
+  const secrets = requiredSecrets(env, checkModelEnabled);
   const requestedRepository = options.repository?.trim() || defaultSessionRepository(env);
   const repositoryFullName = parseRepositoryFullName(requestedRepository);
   const repository: PreflightResult["githubApp"]["repository"] = {
@@ -302,25 +326,25 @@ export async function runPreflight(
     }
   }
 
-  const deepSeek = checkDeepSeekEnabled
-    ? await checkDeepSeek(env, fetchImpl)
+  const model = checkModelEnabled
+    ? await checkGatewayModel(env, fetchImpl)
     : {
         ok: true,
         skipped: true,
-        model: resolveDeepSeekModel(env),
+        id: resolveGatewayModel(env),
         status: null,
       };
   const factoryLabelErrors = validateFactoryLabelConfiguration(env);
   const factoryLabels = { errors: factoryLabelErrors, ok: factoryLabelErrors.length === 0 };
-  const ok = githubApp.ok && deepSeek.ok && factoryLabels.ok && missingSecrets(secrets).length === 0;
-  return { ok, secrets, githubApp, deepSeek, factoryLabels };
+  const ok = githubApp.ok && model.ok && factoryLabels.ok && missingSecrets(secrets).length === 0;
+  return { ok, secrets, githubApp, model, factoryLabels };
 }
 
 export function summarizeSecrets(
   env: Environment = process.env,
-  includeDeepSeek = true,
+  includeModel = true,
 ): SecretStatus {
-  return requiredSecrets(env, includeDeepSeek);
+  return requiredSecrets(env, includeModel);
 }
 
 export async function mintInstallationToken(): Promise<string> {

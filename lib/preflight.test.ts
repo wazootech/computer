@@ -9,7 +9,7 @@ test("summarizes secret presence without returning secret values", () => {
     GITHUB_APP_INSTALLATION_ID: "159856502",
     GITHUB_APP_PRIVATE_KEY: "private-key",
     FACTORY_APPROVAL_SECRET: "approval-secret",
-    DEEPSEEK_API_KEY: "deepseek-key",
+    AI_GATEWAY_API_KEY: "gateway-key",
   });
 
   assert.deepEqual(result, {
@@ -17,7 +17,7 @@ test("summarizes secret presence without returning secret values", () => {
     GITHUB_APP_INSTALLATION_ID: true,
     GITHUB_APP_PRIVATE_KEY: true,
     FACTORY_APPROVAL_SECRET: true,
-    DEEPSEEK_API_KEY: true,
+    GATEWAY_CREDENTIAL: true,
   });
 });
 
@@ -31,9 +31,9 @@ test("reports missing runtime credentials without making network requests", asyn
   assert.equal(result.ok, false);
   assert.equal(fetchCalls, 0);
   assert.equal(result.githubApp.ok, false);
-  assert.equal(result.deepSeek.ok, false);
+  assert.equal(result.model.ok, false);
   assert.match(result.githubApp.error ?? "", /GITHUB_APP_ID/);
-  assert.match(result.deepSeek.error ?? "", /DEEPSEEK_API_KEY/);
+  assert.match(result.model.error ?? "", /AI_GATEWAY_API_KEY/);
 });
 
 test("proves the installation token carries members read and can read the approver team", async () => {
@@ -63,7 +63,7 @@ test("proves the installation token carries members read and can read the approv
       });
       return responses.shift() as Response;
     },
-    { checkDeepSeek: false },
+    { checkModel: false },
   );
 
   assert.equal(result.ok, true);
@@ -105,7 +105,7 @@ test("checks an explicitly named repository and reports a missing one legibly", 
       urls.push(String(input));
       return responses.shift() as Response;
     },
-    { checkDeepSeek: false, repository: "wazootech/not-covered" },
+    { checkModel: false, repository: "wazootech/not-covered" },
   );
 
   assert.equal(result.githubApp.repository.fullName, "wazootech/not-covered");
@@ -136,7 +136,7 @@ test("rejects a malformed repository name instead of asking GitHub about it", as
       urls.push(String(input));
       return responses.shift() as Response;
     },
-    { checkDeepSeek: false, repository: "https://github.com/wazootech/workspace" },
+    { checkModel: false, repository: "https://github.com/wazootech/workspace" },
   );
 
   assert.equal(result.githubApp.repository.fullName, "https://github.com/wazootech/workspace");
@@ -145,7 +145,7 @@ test("rejects a malformed repository name instead of asking GitHub about it", as
   assert.equal(urls.some((url) => url.includes("/repos/")), false);
 });
 
-test("deepseek probe sends the default model and thinking pin like the agent wiring", async () => {
+test("gateway probe sends the default model and thinking pin like the agent wiring", async () => {
   const bodies: string[] = [];
   const result = await runPreflight(
     {
@@ -153,28 +153,24 @@ test("deepseek probe sends the default model and thinking pin like the agent wir
       GITHUB_APP_INSTALLATION_ID: "159856502",
       GITHUB_APP_PRIVATE_KEY: "not-a-key",
       FACTORY_APPROVAL_SECRET: "approval-secret",
-      DEEPSEEK_API_KEY: "deepseek-key",
+      AI_GATEWAY_API_KEY: "gateway-key",
     },
     async (_input, init) => {
-      if (String(init?.body).includes("chat/completions") || init?.body != null) {
-        bodies.push(String(init?.body));
-      }
-      if (String(init?.body).includes("deepseek")) {
-        return new Response(JSON.stringify({ choices: [{ message: { content: "OK" } }] }), { status: 200 });
-      }
-      return new Response("{}", { status: 500 });
+      if (init?.body != null) bodies.push(String(init.body));
+      return new Response(JSON.stringify({ choices: [{ message: { content: "OK" } }] }), { status: 200 });
     },
   );
 
-  const probe = bodies.find((b) => b.includes("chat/completions") || b.includes("deepseek"));
-  assert.ok(probe, "deepseek probe body captured");
-  const parsed = JSON.parse(probe) as { model: string; thinking?: { type: string } };
-  assert.equal(parsed.model, "deepseek-flash");
-  assert.deepEqual(parsed.thinking, { type: "disabled" });
-  assert.equal(result.deepSeek.model, "deepseek-flash");
+  const probe = bodies.map((b) => { try { return JSON.parse(b); } catch { return null; } }).find(
+    (b) => b && typeof b === "object" && "model" in b,
+  ) as { model: string; deepseek?: { thinking?: { type: string } } } | undefined;
+  assert.ok(probe, "gateway probe body captured");
+  assert.equal(probe.model, "deepseek/deepseek-v4.1-flash");
+  assert.deepEqual(probe.deepseek?.thinking, { type: "disabled" });
+  assert.equal(result.model.id, "deepseek/deepseek-v4.1-flash");
 });
 
-test("deepseek probe honors DEEPSEEK_MODEL and DEEPSEEK_THINKING overrides", async () => {
+test("gateway probe honors COMPUTER_MODEL and DEEPSEEK_THINKING overrides", async () => {
   const bodies: string[] = [];
   const result = await runPreflight(
     {
@@ -182,8 +178,8 @@ test("deepseek probe honors DEEPSEEK_MODEL and DEEPSEEK_THINKING overrides", asy
       GITHUB_APP_INSTALLATION_ID: "159856502",
       GITHUB_APP_PRIVATE_KEY: "not-a-key",
       FACTORY_APPROVAL_SECRET: "approval-secret",
-      DEEPSEEK_API_KEY: "deepseek-key",
-      DEEPSEEK_MODEL: "deepseek-v4-flash",
+      AI_GATEWAY_API_KEY: "gateway-key",
+      COMPUTER_MODEL: "deepseek/deepseek-v4.1-flash",
       DEEPSEEK_THINKING: "enabled",
     },
     async (_input, init) => {
@@ -198,13 +194,13 @@ test("deepseek probe honors DEEPSEEK_MODEL and DEEPSEEK_THINKING overrides", asy
   const probe = bodies.map((b) => { try { return JSON.parse(b); } catch { return null; } }).find(
     (b) => b && typeof b === "object" && "model" in b,
   ) as { model: string; thinking?: { type: string } } | undefined;
-  assert.ok(probe, "deepseek probe body captured");
-  assert.equal(probe.model, "deepseek-v4-flash");
-  assert.deepEqual(probe.thinking, { type: "enabled" });
-  assert.equal(result.deepSeek.model, "deepseek-v4-flash");
+  assert.ok(probe, "gateway probe body captured");
+  assert.equal(probe.model, "deepseek/deepseek-v4.1-flash");
+  assert.deepEqual((probe as unknown as { deepseek?: { thinking?: { type: string } } }).deepseek?.thinking, { type: "enabled" });
+  assert.equal(result.model.id, "deepseek/deepseek-v4.1-flash");
 });
 
-test("can skip the DeepSeek check while validating GitHub credentials", async () => {
+test("can skip the model check while validating GitHub credentials", async () => {
   const result = await runPreflight(
     {
       GITHUB_APP_ID: "4864396",
@@ -213,12 +209,71 @@ test("can skip the DeepSeek check while validating GitHub credentials", async ()
       FACTORY_APPROVAL_SECRET: "approval-secret",
     },
     async () => new Response("", { status: 500 }),
-    { checkDeepSeek: false },
+    { checkModel: false },
   );
 
-  assert.equal(result.deepSeek.ok, true);
-  assert.equal(result.deepSeek.skipped, true);
+  assert.equal(result.model.ok, true);
+  assert.equal(result.model.skipped, true);
   assert.equal(result.githubApp.ok, false);
+});
+
+test("names the credential-path failure instead of reporting a bare status", async () => {
+  const unauthorized = await runPreflight(
+    {
+      GITHUB_APP_ID: "4864396",
+      GITHUB_APP_INSTALLATION_ID: "159856502",
+      GITHUB_APP_PRIVATE_KEY: "not-a-key",
+      FACTORY_APPROVAL_SECRET: "approval-secret",
+      AI_GATEWAY_API_KEY: "revoked-key",
+    },
+    async () => new Response(JSON.stringify({ error: { message: "invalid api key" } }), { status: 401 }),
+  );
+  assert.equal(unauthorized.model.ok, false);
+  assert.equal(unauthorized.model.status, 401);
+  assert.match(unauthorized.model.error ?? "", /credential/);
+
+  const forbidden = await runPreflight(
+    {
+      GITHUB_APP_ID: "4864396",
+      GITHUB_APP_INSTALLATION_ID: "159856502",
+      GITHUB_APP_PRIVATE_KEY: "not-a-key",
+      FACTORY_APPROVAL_SECRET: "approval-secret",
+      AI_GATEWAY_API_KEY: "free-tier-key",
+    },
+    async () =>
+      new Response(
+        JSON.stringify({
+          error: { message: "Free tier users do not have access to this model." },
+        }),
+        { status: 403 },
+      ),
+  );
+  assert.equal(forbidden.model.ok, false);
+  assert.equal(forbidden.model.status, 403);
+  assert.match(forbidden.model.error ?? "", /credits/);
+});
+
+test("accepts the Vercel OIDC token when no explicit gateway key is set", async () => {
+  const authorizations: string[] = [];
+  await runPreflight(
+    {
+      GITHUB_APP_ID: "4864396",
+      GITHUB_APP_INSTALLATION_ID: "159856502",
+      GITHUB_APP_PRIVATE_KEY: "not-a-key",
+      FACTORY_APPROVAL_SECRET: "approval-secret",
+      VERCEL_OIDC_TOKEN: "oidc-token",
+    },
+    async (_input, init) => {
+      const headers = new Headers(init?.headers);
+      if (headers.has("authorization")) authorizations.push(headers.get("authorization") ?? "");
+      if (String(init?.body).includes("model")) {
+        return new Response(JSON.stringify({ choices: [{ message: { content: "OK" } }] }), { status: 200 });
+      }
+      return new Response("{}\n", { status: 200 });
+    },
+  );
+
+  assert.ok(authorizations.includes("Bearer oidc-token"), "gateway probe used the OIDC token");
 });
 
 test("validates an explicitly disposable acceptance target", () => {
@@ -235,7 +290,7 @@ test("preflight rejects conflicting factory label configuration", async () => {
     FACTORY_APPROVAL_SECRET: "approval-secret",
     FACTORY_CANDIDATE_LABEL: "same",
     FACTORY_PROMOTED_LABEL: "same",
-  }, async () => { throw new Error("network should not be called"); }, { checkDeepSeek: false });
+  }, async () => { throw new Error("network should not be called"); }, { checkModel: false });
   assert.equal(result.factoryLabels.ok, false);
   assert.match(result.factoryLabels.errors.join(" "), /differ|unique/u);
   assert.equal(result.ok, false);

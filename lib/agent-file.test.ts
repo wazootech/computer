@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
@@ -10,6 +11,7 @@ import {
   type AgentFileSource,
 } from "./agent-file-project.ts";
 import { validateAgentFile } from "./agent-file-schema.ts";
+import { DEFAULT_GATEWAY_MODEL, GATEWAY_BASE_URL } from "./gateway.ts";
 
 /**
  * The projection is a public artifact generated from private source, so these
@@ -293,6 +295,22 @@ test("projects an agent that has no eve build, from its source directory alone",
   assert.equal(file.tools[0]?.metadata_.runnable, "false");
   assert.equal(file.tools[1]?.metadata_.source_path, "");
   assert.equal(validateAgentFile(file).ok, true);
+});
+
+test("declares the model the runtime actually runs", () => {
+  const declaration = parseAgentFileDeclaration(
+    JSON.parse(readFileSync(DECLARATION_PATH, "utf8")),
+  );
+  assert.equal(
+    declaration.model.handle,
+    DEFAULT_GATEWAY_MODEL,
+    "the published handle must be the gateway model the runtime resolves, or the file describes a model nobody runs",
+  );
+  assert.equal(
+    declaration.model.endpoint,
+    GATEWAY_BASE_URL,
+    "the declared endpoint must be the one the agent authenticates against",
+  );
 });
 
 function validateCommitted(value: unknown) {
