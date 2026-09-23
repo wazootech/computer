@@ -137,14 +137,28 @@ env:        COMPUTER_BASE_URL,
             DISCORD_INTERNAL_USER_IDS, DISCORD_INTERNAL_ROLE_IDS
 ```
 
-`DISCORD_BOT_TOKEN` and `DISCORD_BRIDGE_SECRET` stay out of that definition. A
+`DISCORD_BOT_TOKEN` stays out of that definition. A
 managed service inherits neither the host shell nor this deployment's Vercel
-variables, and Vercel marks both as sensitive, so their values can never be read
-back out of it. The bridge therefore loads them from the host secrets file
+variables, and Vercel marks it as sensitive, so its value can never be read
+back out of it. The bridge therefore loads it from the host secrets file
 (`/root/.zo_secrets`, the same file the other Zo-hosted bots read; override with
 `ZO_SECRETS_PATH`) before anything reads the environment. An environment value
 always wins over the file, so the service definition can still override anything
 the file holds.
+
+`DISCORD_BRIDGE_SECRET` is the exception, and it belongs on the service
+definition. The host file is rewritten from Zo's managed secrets, so a line
+appended to it by hand is gone within hours — the bridge keeps signing with the
+copy it read at startup, then fails `requiredEnv("DISCORD_BRIDGE_SECRET")` at its
+next restart, which any push to this repository triggers. Keep the value on the
+service definition, where nothing rewrites it.
+
+Both sides must hold the same secret, and Vercel will not read its sensitive
+copy back, so rotate them together: set the new value on the service definition,
+set it on the Vercel production environment, redeploy the function, and restart
+the bridge. A correctly signed body of `{"kind":"unsupported"}` is the cheapest
+proof that the two agree — it returns `400 unsupported-kind` once the signature
+verifies and never dispatches a turn, while a stale secret returns `401`.
 
 `scripts/zo-deploy.ts` deploys a new revision over Zo's MCP endpoint (`api.zo.computer/mcp`), which needs no open ports on the host:
 
