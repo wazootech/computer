@@ -131,10 +131,19 @@ label:      computer-discord-bridge
 mode:       process
 workdir:    /home/workspace/users/etok/workspaces/wazootech/repos/computer
 entrypoint: node --experimental-strip-types bridge/discord-gateway/index.ts
-env:        DISCORD_BOT_TOKEN, DISCORD_BRIDGE_SECRET, COMPUTER_BASE_URL,
+env:        COMPUTER_BASE_URL,
             DISCORD_INTERNAL_GUILD_IDS, DISCORD_INTERNAL_CHANNEL_IDS,
             DISCORD_INTERNAL_USER_IDS, DISCORD_INTERNAL_ROLE_IDS
 ```
+
+`DISCORD_BOT_TOKEN` and `DISCORD_BRIDGE_SECRET` stay out of that definition. A
+managed service inherits neither the host shell nor this deployment's Vercel
+variables, and Vercel marks both as sensitive, so their values can never be read
+back out of it. The bridge therefore loads them from the host secrets file
+(`/root/.zo_secrets`, the same file the other Zo-hosted bots read; override with
+`ZO_SECRETS_PATH`) before anything reads the environment. An environment value
+always wins over the file, so the service definition can still override anything
+the file holds.
 
 `scripts/zo-deploy.ts` deploys a new revision over Zo's MCP endpoint (`api.zo.computer/mcp`), which needs no open ports on the host:
 
