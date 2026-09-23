@@ -17,8 +17,6 @@
     "discord:bridge": "node --experimental-strip-types bridge/discord-gateway/index.ts",
     "discord:deploy": "node --experimental-strip-types scripts/zo-deploy.ts",
     "export:agent-file": "node --experimental-strip-types scripts/export-agent-file.ts --manifest .eve/agent-summary.json",
-    "export:data-agent-file": "node --experimental-strip-types scripts/export-agent-file.ts --source agents/data/agent --agent-dir agents/data/agent --out agents/@wazootech/data/data.af",
-    "check:data-agent-file": "node --experimental-strip-types scripts/export-agent-file.ts --source agents/data/agent --agent-dir agents/data/agent --out agents/@wazootech/data/data.af --check",
     "check:agent-file": "node --experimental-strip-types scripts/export-agent-file.ts --manifest .eve/agent-summary.json --check",
     "build:eve": "eve build",
     "dev:eve": "eve dev",

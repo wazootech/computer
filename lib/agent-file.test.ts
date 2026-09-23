@@ -22,8 +22,6 @@ import { DEFAULT_GATEWAY_MODEL, GATEWAY_BASE_URL } from "./gateway.ts";
 
 const DECLARATION_PATH = "agent/agent-file-declaration.json";
 const AGENT_FILE_PATH = "agents/@wazootech/computer/computer.af";
-const DATA_DECLARATION_PATH = "agents/data/agent/agent-file-declaration.json";
-const DATA_AGENT_FILE_PATH = "agents/@wazootech/data/data.af";
 
 function fixtureDeclaration() {
   return parseAgentFileDeclaration({
@@ -70,7 +68,7 @@ function fixtureSource(overrides: Partial<AgentFileSource> = {}): AgentFileSourc
     skills: [],
     repositoryUrl: "https://github.com/wazootech/fixture",
     projectPath: "agent",
-    projectionMode: "source",
+    projectionMode: "eve-manifest",
     ...overrides,
   };
 }
@@ -151,35 +149,6 @@ test("the committed declaration and file pass every privacy and integrity check"
       block.shareable,
       `block ${block.label} exports a value if and only if it is declared shareable`,
     );
-  }
-});
-
-test("Data's committed declaration and file pass the same checks, in source mode", async () => {
-  const declaration = parseAgentFileDeclaration(JSON.parse(await readFile(DATA_DECLARATION_PATH, "utf8")));
-  const file = validateCommitted(JSON.parse(await readFile(DATA_AGENT_FILE_PATH, "utf8")));
-
-  assert.deepEqual(checkAgentFilePrivacy(file, declaration), []);
-  assert.deepEqual(checkProjectionIntegrity(file, file.agents[0]?.system ?? ""), []);
-
-  // Data has no eve build yet, so the projection mode records that fact rather
-  // than presenting a source-only projection as a compiled one.
-  assert.equal(file.metadata.projection_mode, "source");
-  assert.equal(file.metadata.project_path, "agents/data/agent");
-
-  for (const block of declaration.blocks) {
-    const exported = file.blocks.find((entry) => entry.label === block.label);
-    assert.ok(exported, `block ${block.label} is declared but missing from the export`);
-    assert.equal(
-      exported.value.length > 0,
-      block.shareable,
-      `block ${block.label} exports a value if and only if it is declared shareable`,
-    );
-  }
-
-  // Read-only by construction: none of the declared tools is a write.
-  assert.ok(file.tools.length > 0, "Data declares a tool surface");
-  for (const tool of file.tools) {
-    assert.equal(tool.metadata_.write, "false", `${tool.name} would let Data write`);
   }
 });
 
@@ -274,27 +243,6 @@ test("a private block without a recorded reason is rejected at parse time", () =
       }),
     /private, so it needs a privateBecause reason/u,
   );
-});
-
-test("projects an agent that has no eve build, from its source directory alone", () => {
-  const file = projectAgentFile(
-    fixtureSource({
-      tools: [
-        { name: "read_issue", description: "Read an issue.", sourcePath: "agent/tools/read_issue.ts" },
-        { name: "search_docs", description: "Search the docs.", sourcePath: null },
-      ],
-    }),
-  );
-
-  assert.equal(file.metadata.projection_mode, "source");
-  assert.deepEqual(file.agents[0]?.tool_ids, ["tool-0", "tool-1"]);
-  // Sorted by name, so the ids stay stable no matter who authored the list.
-  assert.deepEqual(file.tools.map((tool) => tool.name), ["read_issue", "search_docs"]);
-  assert.equal(file.tools[0]?.metadata_.source_path, "agent/tools/read_issue.ts");
-  assert.equal(file.tools[0]?.metadata_.source_repository, "https://github.com/wazootech/fixture");
-  assert.equal(file.tools[0]?.metadata_.runnable, "false");
-  assert.equal(file.tools[1]?.metadata_.source_path, "");
-  assert.equal(validateAgentFile(file).ok, true);
 });
 
 test("declares the model the runtime actually runs", () => {

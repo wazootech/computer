@@ -32,7 +32,7 @@ The result is a draft pull request. Merge and ready-for-review actions are inten
 
 `agents/@wazootech/computer/computer.af` is the generated, importable declaration of this agent layer. It is a projection, not a source of truth: `scripts/export-agent-file.ts` reads the compiled manifest (`.eve/agent-summary.json`), the declaration (`agent/agent-file-declaration.json`), and the authored tool bindings, and writes the file. Nothing generated is ever read back into `agent/`.
 
-The same exporter projects **Data's** file in *source mode*, where there is no eve build to read: `agents/data/agent/instructions.md` is the prompt, and `agents/data/agent/agent-file-declaration.json` names the GitHub tools Data may call — the read half only. Names are declared; descriptions and the read/write class still come from the SDK, so the two agents cannot disagree about what a tool is. Data's file is committed here and published to `wazootech/data/agents/@wazootech/data/data.af`: this repository's CI is the drift guard for both copies.
+Data's agent source has moved to the `wazootech/data` repository, which publishes and checks its own `.af` file; this repository no longer carries a Data projection or its source-only exporter path, so the Agent File projection below covers Computer alone.
 
 - **The system prompt is exported verbatim** from the compiled instructions. A reworded or truncated prompt fails the export rather than shipping a file that describes an agent nobody runs.
 - **Memory blocks are allowlisted, block by block.** `persona` and `scope` publish; `factory_brain`, `user_preferences`, `run_history`, and `intake_state` export schema-only and each states why it stays private. An undeclared block, or a private block carrying a value, fails the export. Messages and credentials are always empty.
@@ -41,7 +41,7 @@ The same exporter projects **Data's** file in *source mode*, where there is no e
 - **The model is declared, then checked.** `llm_config` is declared in the same file as the blocks, and the export cross-checks the declared handle against the model the compiled manifest actually runs, so a model change cannot leave the published declaration behind.
 - **Skills export whole.** Each `agent/skills/*/SKILL.md` ships with its content and a source URL; the other eve surfaces have no counterpart.
 
-`pnpm run export:agent-file` and `pnpm run export:data-agent-file` regenerate the two files; `pnpm run check:agent-file` and `pnpm run check:data-agent-file` fail when a committed file is out of date, which is the guard against hand edits. CI builds the manifest, then runs both checks. Export behavior is covered by `lib/agent-file.test.ts` (schema validity, byte stability, privacy, and integrity) and `lib/github-tool-catalog.test.ts` (surface completeness, description extraction, and the write/approval split).
+`pnpm run export:agent-file` regenerates the file and `pnpm run check:agent-file` fails when it is out of date, which is the guard against hand edits. CI builds the manifest, then runs the check. Export behavior is covered by `lib/agent-file.test.ts` (schema validity, byte stability, privacy, and integrity) and `lib/github-tool-catalog.test.ts` (surface completeness, description extraction, and the write/approval split).
 
 ## Memory boundary
 
