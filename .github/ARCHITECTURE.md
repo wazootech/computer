@@ -17,6 +17,7 @@ The result is a draft pull request. Merge and ready-for-review actions are inten
 ## Eve capabilities
 
 - `agent/channels/github.ts` handles authorized mentions, `factory`-label intake, CI-failure follow-up, and PR summaries.
+- Failure comments are policy-controlled. `lib/failure-policy.ts` decides what a channel may say when a turn or session fails: a **deployment fault** (an unusable credential, an unpaid gateway account, or a model the account cannot reach) posts nothing, because only an operator can clear it, and every other failure posts one generic sentence that never carries the upstream provider's text. eve's built-in handler echoes that text verbatim, which is how a revoked key repeated `Model provider API error: Authentication Fails, Your api key: ****53a6...` into the originating thread on every dispatch.
 - `agent/channels/discord-mentions.ts` owns ordinary `@Computer` mentions in the internal Discord channel; `bridge/discord-gateway/` holds the Gateway connection that carries them, and `lib/discord-mention-policy.ts` decides admission.
 - `agent/extensions/github.ts` mounts the official GitHub tools with an explicit allowlist and the WazooComputer GitHub App installation token.
 - `agent/subagents/` contains isolated station prompts, sandboxes, and handoff tools.

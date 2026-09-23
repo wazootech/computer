@@ -21,6 +21,7 @@ import {
   createDedupeCache,
   verifyDiscordBridgeRequest,
 } from "../../lib/discord-bridge.ts";
+import { describeFailure, failureCommentBody } from "../../lib/failure-policy.ts";
 import { discordPolicyConfigFromEnv } from "../../lib/discord-policy.ts";
 import {
   type DiscordMentionAdmission,
@@ -143,6 +144,27 @@ async function tryTyping(state: DiscordMentionState): Promise<void> {
 
 function ignored(reason: string): Response {
   return Response.json({ dispatched: false, ok: true, reason }, { status: 202 });
+}
+
+/**
+ * Posts the failure notice for one failed turn or session, or nothing at all
+ * when the failure is a deployment fault (see `lib/failure-policy.ts`); the
+ * evidence goes to the runtime log instead of the channel.
+ */
+async function postFailureNotice(
+  failure: {
+    readonly code: string;
+    readonly details?: Record<string, unknown> | undefined;
+    readonly message: string;
+  },
+  channel: DiscordMentionContext,
+): Promise<void> {
+  const body = failureCommentBody(failure);
+  if (body === null) {
+    console.error("computer deployment fault suppressed on Discord", describeFailure(failure));
+    return;
+  }
+  await tryPost(channel.state, body);
 }
 
 /** Forwards one admitted mention into its channel-scoped session. */
@@ -281,11 +303,11 @@ export default defineChannel<DiscordMentionState, DiscordMentionContext>({
       if (typeof data.message !== "string" || data.message.length === 0) return;
       await tryPost(channel.state, data.message);
     },
-    async "session.failed"(_data, channel) {
-      await tryPost(channel.state, "Computer could not recover from an error on that request. Please try again.");
+    async "session.failed"(data, channel) {
+      await postFailureNotice(data, channel);
     },
-    async "turn.failed"(_data, channel) {
-      await tryPost(channel.state, "Computer hit an error handling that request. Please try again or rephrase it.");
+    async "turn.failed"(data, channel) {
+      await postFailureNotice(data, channel);
     },
     async "turn.started"(_data, channel) {
       await tryTyping(channel.state);

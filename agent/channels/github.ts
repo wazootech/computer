@@ -1,6 +1,7 @@
 import {
   defaultGitHubAuth,
   type GitHubComment,
+  type GitHubEventContext,
   type GitHubInboundContext,
   githubChannel,
 } from "eve/channels/github";
@@ -33,6 +34,7 @@ import {
   repositoryTargetFromInbound,
 } from "../lib/github/repository-target.js";
 import { intakeStateForLabels, planIntakeStateTransition } from "../lib/intake-policy.js";
+import { describeFailure, failureCommentBody } from "../../lib/failure-policy.js";
 
 const githubCredentials = {
   appId: () => process.env.GITHUB_APP_ID ?? "",
@@ -263,6 +265,34 @@ const PR_SUMMARY_TASK = [
 const BODY_MENTION_ACTIONS = new Set(["opened", "edited"]);
 
 /**
+ * Posts the failure comment for one failed turn or session, or nothing at all
+ * when the failure is a deployment fault (see `lib/failure-policy.ts`).
+ *
+ * The deployment evidence goes to the runtime log instead of the thread: a
+ * revoked credential is an operator problem, and repeating it in a reply is
+ * noise on somebody else's conversation.
+ */
+async function postFailureComment(
+  failure: {
+    readonly code: string;
+    readonly details?: Record<string, unknown> | undefined;
+    readonly message: string;
+  },
+  channel: GitHubEventContext,
+): Promise<void> {
+  const body = failureCommentBody(failure);
+  if (body === null) {
+    console.error("computer deployment fault suppressed on GitHub", describeFailure(failure));
+    return;
+  }
+  try {
+    await channel.thread.post(body);
+  } catch (error) {
+    console.error("github failure comment could not be posted", { error });
+  }
+}
+
+/**
  * GitHub channel: the factory's main intake and delivery surface, as
  * "Computer".
  *
@@ -322,6 +352,17 @@ const BODY_MENTION_ACTIONS = new Set(["opened", "edited"]);
 export default githubChannel({
   botName: resolveTeamMention,
   credentials: githubCredentials,
+  // Only the two failure events are overridden: eve's defaults post the
+  // provider's own words for a model rejection, and `turn.started` owns the
+  // repository checkout, so it must stay the framework's.
+  events: {
+    async "turn.failed"(data, channel) {
+      await postFailureComment(data, channel);
+    },
+    async "session.failed"(data, channel) {
+      await postFailureComment(data, channel);
+    },
+  },
   onCheckSuite: async (ctx, suite) => {
     const raw = suite.raw as {
       head_branch?: unknown;
