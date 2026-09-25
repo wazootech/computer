@@ -192,16 +192,12 @@ pnpm build:eve
 
 ## Agent File
 
-`agents/@wazootech/computer/computer.af` is the generated [Agent File](https://github.com/letta-ai/agent-file) declaration of Computer's agent layer ([#73](https://github.com/wazootech/computer/issues/73)). It is produced from source and never hand-edited:
+Retired 2026-09-25. This repository no longer publishes or checks an [Agent File](https://github.com/letta-ai/agent-file) projection.
 
-```bash
-pnpm build:eve                 # the projection reads the compiled manifest
-pnpm export:agent-file         # regenerate computer.af
-pnpm check:agent-file          # fail if the committed file is out of date
-```
+The projection described less than the agent is: channels, subagents, sandboxes, approval tiers, and hooks have no `.af` counterpart, so the file could not be imported and run. It was also the only consumer of its own artifact — Computer does not run a Letta framework, and nothing read the file back.
 
-The file carries the system prompt verbatim, the allowlisted memory blocks, and the bound tool surface; see [`.github/ARCHITECTURE.md`](.github/ARCHITECTURE.md) for what is deliberately left out.
+What was removed: `agents/@wazootech/computer/computer.af`, `agent/agent-file-declaration.json`, `lib/agent-file-{schema,project,privacy,test}.ts`, `scripts/export-agent-file.ts`, the `export:agent-file` / `check:agent-file` scripts, the `check:agent-file` CI step, and the documentation that described them. The published file is preserved in `wazootech/data` at `archives/agent-file/data.af`, alongside the reason it was retired there.
 
-Data's agent source lives in `wazootech/data`, and that repository publishes and checks its own `.af` file. This repository no longer carries Data's source or a Data projection.
+Nothing about the live agent changed: this artifact was never read at runtime.
 
 The factory evals are under `evals/`. Full-pipeline evals can create branches and consume model tokens, so run them only against a disposable target repository.
