@@ -28,21 +28,6 @@ The result is a draft pull request. Merge and ready-for-review actions are inten
 - `agent/lib/github/session-attachment.ts` attaches a verified repository to sessions that no GitHub event started, through the `x-computer-repository` header or the deployment default.
 - `agent/lib/github/approver-login.ts` resolves a chat session's approval to a verified GitHub login from the approver-team roster, and `preflight` proves the roster is readable.
 
-## Agent File projection
-
-`agents/@wazootech/computer/computer.af` is the generated, importable declaration of this agent layer. It is a projection, not a source of truth: `scripts/export-agent-file.ts` reads the compiled manifest (`.eve/agent-summary.json`), the declaration (`agent/agent-file-declaration.json`), and the authored tool bindings, and writes the file. Nothing generated is ever read back into `agent/`.
-
-Data's agent source has moved to the `wazootech/data` repository, which publishes and checks its own `.af` file; this repository no longer carries a Data projection or its source-only exporter path, so the Agent File projection below covers Computer alone.
-
-- **The system prompt is exported verbatim** from the compiled instructions. A reworded or truncated prompt fails the export rather than shipping a file that describes an agent nobody runs.
-- **Memory blocks are allowlisted, block by block.** `persona` and `scope` publish; `factory_brain`, `user_preferences`, `run_history`, and `intake_state` export schema-only and each states why it stays private. An undeclared block, or a private block carrying a value, fails the export. Messages and credentials are always empty.
-- **The tool surface is derived, not declared.** `agent/tools/github__*.ts` bind the `@github-tools/sdk` factories through `defineDynamic`, so they never appear in the compiled manifest; the projection enumerates those binding files and resolves each one's description and read/write class from the installed SDK's type declarations. A bound tool with no resolvable description stops the export, so the surface cannot silently shrink. Parameter schemas are not projected — TypeScript tool code does not run on another framework — so each tool carries `schema_fidelity: declared` plus `source_path` and `source_repository` pointers.
-- **Channels, subagents, schedules, sandboxes, approval tiers, and hooks have no `.af` counterpart** and stay eve-only. Approval policy is tiered and risk-scaled, so it is carried as the per-tool `write` flag rather than flattened into `default_requires_approval`.
-- **The model is declared, then checked.** `llm_config` is declared in the same file as the blocks, and the export cross-checks the declared handle against the model the compiled manifest actually runs, so a model change cannot leave the published declaration behind.
-- **Skills export whole.** Each `agent/skills/*/SKILL.md` ships with its content and a source URL; the other eve surfaces have no counterpart.
-
-`pnpm run export:agent-file` regenerates the file and `pnpm run check:agent-file` fails when it is out of date, which is the guard against hand edits. CI builds the manifest, then runs the check. Export behavior is covered by `lib/agent-file.test.ts` (schema validity, byte stability, privacy, and integrity) and `lib/github-tool-catalog.test.ts` (surface completeness, description extraction, and the write/approval split).
-
 ## Memory boundary
 
 Computer-specific curated memory and redacted run records use Vercel Blob for the first factory implementation. Reserved namespaces prevent generic file tools from reading or overwriting factory brain and run records. A follow-up issue tracks optional synchronization to the private `wazootech/computer-memory` repository; that integration is not part of this factory adoption.

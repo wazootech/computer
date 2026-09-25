@@ -39,11 +39,9 @@ jobs:
         run: pnpm test
 
       # The build compiles the authored app into eve's manifest (channel routes,
-      # tool registry) and the committed .af file is projected from that
-      # manifest, so one build feeds it. Typecheck and unit tests cannot see
-      # that layer, and it takes seconds. `agent/channels/eve.ts` refuses to
-      # resolve without a trusted host, so the build runs with development
-      # values.
+      # tool registry). Typecheck and unit tests cannot see that layer, and it
+      # takes seconds. `agent/channels/eve.ts` refuses to resolve without a
+      # trusted host, so the build runs with development values.
       - name: Build eve app
         run: pnpm run build:eve
         env:
@@ -52,8 +50,3 @@ jobs:
           VERCEL_APP_CLIENT_ID: ci-only
           VERCEL_APP_CLIENT_SECRET: ci-only
 
-      # The .af file is a generated artifact: regenerate it from the manifest
-      # and fail on any diff, so a committed projection cannot drift from what
-      # the agent actually does.
-      - name: Agent file is regenerated from the manifest
-        run: pnpm run check:agent-file
