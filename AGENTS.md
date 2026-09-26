@@ -4,6 +4,18 @@ This project uses the eve framework: an agent is a directory of files under `age
 
 For a content-only change to the root agent's identity, purpose, tone, or response guidelines, edit its existing authored instructions. Fresh projects use `agent/instructions.md`; a project may instead use `agent/instructions.ts` or files under `agent/instructions/`. You do not need to read the framework docs for a content-only instructions change. A fresh project already has its selected model in `agent/agent.ts`; preserve that file unless the user asks to change the model.
 
+## Where Computer's brain lives
+
+Computer's brain is a Zo persona (`5f58a6ba-da81-4b8e-9105-4c85685a6a93`), not this
+Vercel app. `channels/discord/index.ts` is a thin channel that holds the Discord
+Gateway connection and calls `/zo/ask` with that persona; the persona owns the
+prompt and the model, so neither is named in code here.
+
+The prompt of record is `agent/instructions.ts`. When the persona changes, update
+that file to match it. `agent/**` still holds the eve agent that the Vercel app
+builds, which is the factory path and the web surface, not Computer's Discord
+brain.
+
 ## Read the docs before writing code
 
 ```sh
@@ -53,3 +65,24 @@ A setup may report `eve link` as a prerequisite; run it, then retry the continua
 ## Validate the change
 
 Run the validation the task requests. When it does not establish the behavior you changed, run the narrowest relevant check.
+
+## Where Computer actually runs
+
+The eve app under `agent/` is compiled into the Vercel deployment, but Computer's Discord brain is not part of it. `channels/discord/index.ts` runs on the Zo host as the `computer-discord` service, admits `@Computer` mentions against the allowlists in `lib/discord-*`, and asks the Zo persona `COMPUTER_PERSONA_ID` over `/zo/ask`. The persona owns the prompt and the model, so no model or provider credential belongs in this repository.
+
+`agent/instructions.ts` is the record of the persona's prompt text. When the persona's prompt changes in Zo, update that file to match; the persona is the runtime, the file is the record.
+
+## Where Computer's brain lives
+
+Computer's brain is a Zo persona, not this repository. `channels/discord/index.ts`
+is the channel that reaches it: one Gateway socket, admission from the pure
+modules in `lib/`, one `/zo/ask` call per admitted mention, and the reply posted
+back into the channel. The persona owns the prompt and the model, so changing how
+Computer thinks is a persona edit in Zo; this repository owns the transport.
+
+The Vercel app under `app/`, `agent/`, and `lib/` is the web and GitHub surface. A
+push to `main` ships it, so a change there is live once the build lands. The
+Discord channel does not deploy that way: `.github/workflows/deploy.yml` restarts
+the host service over Zo's MCP endpoint, and `scripts/zo-deploy.ts` is the client
+it runs. The channel's source still needs `pnpm run typecheck` and `pnpm test` to
+pass, the same as the app.

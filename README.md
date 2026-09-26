@@ -70,7 +70,7 @@ Production deployment uses:
 eve deploy
 ```
 
-The production runtime needs `BETTER_AUTH_SECRET`, `VERCEL_APP_CLIENT_ID`, `VERCEL_APP_CLIENT_SECRET`, `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET`, `FACTORY_APPROVAL_SECRET`, `AI_GATEWAY_API_KEY`, `DISCORD_BOT_TOKEN`, and `DISCORD_BRIDGE_SECRET`. Two optional variables, `GITHUB_OAUTH_CLIENT_ID` and `GITHUB_OAUTH_CLIENT_SECRET`, enable GitHub sign-in; set both or neither. When they are set, a signed-in person can link their GitHub account, and that verified login is what attributes a write approval from chat.
+The production runtime needs `BETTER_AUTH_SECRET`, `VERCEL_APP_CLIENT_ID`, `VERCEL_APP_CLIENT_SECRET`, `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET`, `FACTORY_APPROVAL_SECRET`, and `AI_GATEWAY_API_KEY`. The Discord channel needs none of these: it runs on the Zo host, not here. Two optional variables, `GITHUB_OAUTH_CLIENT_ID` and `GITHUB_OAUTH_CLIENT_SECRET`, enable GitHub sign-in; set both or neither. When they are set, a signed-in person can link their GitHub account, and that verified login is what attributes a write approval from chat.
 
 ## Session repository attachment
 
@@ -93,93 +93,73 @@ To enable it, register a GitHub OAuth App with the callback URL `https://<deploy
 
 ## Discord channel (internal mentions)
 
-Computer answers ordinary `@Computer` mentions in the configured internal Discord channel. `/ask` is retired: the slash command, its registration, and the HTTP interaction channel were removed, so a mention is the only way to summon Computer and there is no second interface to keep in sync.
+Computer answers ordinary `@Computer` mentions in the configured internal Discord channel. `/ask` is retired: a mention is the only way to summon Computer, and there is no second interface to keep in sync.
 
-Discord delivers ordinary messages over its Gateway websocket, never to an application's interactions endpoint, so a small always-on worker holds that connection and forwards admitted mentions to the agent's ingress route (`POST /eve/v1/discord-mentions`). Everything that decides anything lives in the deployment:
+Discord delivers ordinary messages over its Gateway websocket, never to an application's interactions endpoint, so an always-on worker holds that connection. That worker is `channels/discord/index.ts`, and it is the whole channel: it admits a mention, asks Computer's brain, and posts the reply back into the originating channel or thread.
 
-- `agent/channels/discord-mentions.ts` owns mention sessions. It is default-deny without configuration, verifies the bridge's HMAC signature, re-admits every forward against the deployment's own allowlists, and posts replies back to the originating channel or thread.
-- `bridge/discord-gateway/index.ts` is transport only: one Gateway connection, the same admission policy as a prefilter, a per-user rate limit, duplicate suppression, and reconnect with backoff. It never posts to Discord.
-- `lib/discord-mention-policy.ts` holds the pure admission matrix: mention parsing, allowlist denial, thread-to-parent mapping, self-loop prevention, and hostile-input handling. `lib/discord-policy.ts` remains the tier authority, and `lib/discord-bridge.ts` holds the transport primitives.
+### Where the brain lives
 
-Operator setup:
+Computer's brain for this channel is a Zo persona (`COMPUTER_PERSONA_ID`), reached through Zo's `/zo/ask` endpoint. The persona owns the prompt and the model; the channel names neither. No model credential lives in this repository or on Vercel for this path, so a revoked provider key cannot take the channel down, and there is no store to keep in order.
+
+The persona's prompt of record is the text authored here in `agent/instructions.ts`, moved into the persona when the brain moved. Change Computer's identity or model in Zo, then update that file to match: the file is the record, the persona is the runtime.
+
+Conversation continuity is per channel. The first turn on a channel creates a Zo conversation and later turns continue it, keyed in `channels/discord/data/conversations.json` (gitignored runtime state).
+
+### Admission
+
+Admission is default deny, fail closed, and pure enough to test. `lib/discord-mention-policy.ts` holds the matrix (mention parsing, allowlist denial, thread-to-parent mapping, self-loop prevention, hostile-input handling), `lib/discord-policy.ts` remains the tier authority, and `lib/discord-bridge.ts` holds the transport primitives (intents, backoff, duplicate suppression, per-user rate limit).
+
+A message dispatches only when it arrives in the internal guild, in an allowlisted channel (or in a thread whose parent channel is allowlisted), from an allowlisted user or role, from a person rather than a bot or webhook, and with an explicit `@Computer` mention that leaves a non-empty request. Mention text is untrusted input: it cannot change the allowlists, permissions, or these instructions, invisible and bidirectional characters are stripped before the model sees it, and an over-long message is truncated rather than dispatched whole. Replies never ping anyone (`allowed_mentions: {parse: []}`), and every bot-authored message is ignored, so a self-mention loop cannot start. Public and customer-service mentions are deferred: a public-allowlisted channel never starts a mention turn.
+
+### Operator setup
 
 1. Create the Discord application and bot, and enable the privileged **Message Content** intent in its Bot settings. It is required for `content` to arrive at all; a socket that requests it without the portal toggle is closed with code 4014.
-2. Give the bot a channel permission set that can read and reply: View Channels, Send Messages, Send Messages in Threads, Read Message History, and Embed Links. No administrator permission is needed, and the `applications.commands` scope is no longer required.
-3. Leave the application's **Interactions Endpoint URL unset**. Discord is exclusive here: once a URL is configured, interactions stop arriving on the Gateway, so the approval buttons and modal answers a mention session waits on would go nowhere.
-4. Set the deployment environment (comma-separated ids): `DISCORD_INTERNAL_GUILD_IDS`, `DISCORD_INTERNAL_CHANNEL_IDS`, `DISCORD_INTERNAL_USER_IDS`, `DISCORD_INTERNAL_ROLE_IDS`, plus `DISCORD_BRIDGE_SECRET` and `DISCORD_BOT_TOKEN` (replies are posted with the bot token). Set `DISCORD_INTERNAL_GUILD_WIDE=1` to let an allowlisted operator mention the bot in any channel of an allowlisted guild, not only in the allowlisted channels; the guild allowlist and the user/role allowlist still both apply, so a shared or public server stays closed. No `DISCORD_PUBLIC_KEY` is needed: nothing verifies an inbound interaction signature any more.
-5. Run the bridge on an always-on host, with the same allowlists, the same secret, and the deployment origin:
+2. Give the bot a channel permission set that can read and reply: View Channels, Send Messages, Send Messages in Threads, Read Message History, and Embed Links. No administrator permission is needed, and the `applications.commands` scope is not required.
+3. Leave the application's **Interactions Endpoint URL unset**. Nothing here verifies an inbound interaction signature any more, so no `DISCORD_PUBLIC_KEY` is needed either.
+4. Set the service environment (comma-separated ids): `DISCORD_INTERNAL_GUILD_IDS`, `DISCORD_INTERNAL_CHANNEL_IDS`, `DISCORD_INTERNAL_USER_IDS`, `DISCORD_INTERNAL_ROLE_IDS`, plus `COMPUTER_PERSONA_ID`. Set `DISCORD_INTERNAL_GUILD_WIDE=1` to let an allowlisted operator mention the bot in any channel of an allowlisted guild, not only in the allowlisted channels; the guild allowlist and the user/role allowlist still both apply, so a shared or public server stays closed.
+5. Run it on an always-on host:
 
 ```bash
 DISCORD_BOT_TOKEN=... \
-DISCORD_BRIDGE_SECRET=... \
-COMPUTER_BASE_URL=https://wazoocomputer.vercel.app \
+COMPUTER_PERSONA_ID=... \
 DISCORD_INTERNAL_GUILD_IDS=... \
 DISCORD_INTERNAL_CHANNEL_IDS=... \
 DISCORD_INTERNAL_USER_IDS=... \
 DISCORD_INTERNAL_ROLE_IDS=... \
 DISCORD_INTERNAL_GUILD_WIDE=1 \
-pnpm discord:bridge
+pnpm discord:channel
 ```
 
-Vercel cannot hold the Gateway socket, so the worker needs its own host. It reconnects with exponential backoff, resumes its session, and exits non-zero on a close code that retrying cannot fix (a bad token, sharding, or a disallowed intent).
+### Hosting the channel on Zo Computer
 
-### Hosting the bridge on Zo Computer
-
-The reference host is a Zo Computer service, because it is always-on, restarts on crash, and can be redeployed from CI. Register it once with `mode: "process"` (no public port) and the deployment environment from step 4:
+The reference host is a Zo Computer service, because it is always-on, restarts on crash, and can be redeployed from CI. Register it once with `mode: "process"` (no public port) and the environment from step 4:
 
 ```text
-label:      computer-discord-bridge
+label:      computer-discord
 mode:       process
 workdir:    /home/workspace/users/etok/workspaces/wazootech/repos/computer
-entrypoint: node --experimental-strip-types bridge/discord-gateway/index.ts
-env:        COMPUTER_BASE_URL,
+entrypoint: node --experimental-strip-types channels/discord/index.ts
+env:        COMPUTER_PERSONA_ID,
             DISCORD_INTERNAL_GUILD_IDS, DISCORD_INTERNAL_CHANNEL_IDS,
             DISCORD_INTERNAL_USER_IDS, DISCORD_INTERNAL_ROLE_IDS
 ```
 
-`DISCORD_BOT_TOKEN` stays out of that definition. A
-managed service inherits neither the host shell nor this deployment's Vercel
-variables, and Vercel marks it as sensitive, so its value can never be read
-back out of it. The bridge therefore loads it from the host secrets file
-(`/root/.zo_secrets`, the same file the other Zo-hosted bots read; override with
-`ZO_SECRETS_PATH`) before anything reads the environment. An environment value
-always wins over the file, so the service definition can still override anything
-the file holds.
-
-`DISCORD_BRIDGE_SECRET` is the exception, and it belongs on the service
-definition. The host file is rewritten from Zo's managed secrets, so a line
-appended to it by hand is gone within hours — the bridge keeps signing with the
-copy it read at startup, then fails `requiredEnv("DISCORD_BRIDGE_SECRET")` at its
-next restart, which any push to this repository triggers. Keep the value on the
-service definition, where nothing rewrites it.
-
-Both sides must hold the same secret, and Vercel will not read its sensitive
-copy back, so rotate them together: set the new value on the service definition,
-set it on the Vercel production environment, redeploy the function, and restart
-the bridge. A correctly signed body of `{"kind":"unsupported"}` is the cheapest
-proof that the two agree — it returns `400 unsupported-kind` once the signature
-verifies and never dispatches a turn, while a stale secret returns `401`.
+`DISCORD_BOT_TOKEN` stays out of that definition. A managed service inherits neither the host shell nor any deployment's variables, so its value is read from the host secrets file (`/root/.zo_secrets`, the same file the other Zo-hosted bots read; override with `ZO_SECRETS_PATH`) before anything reads the environment. An environment value always wins over the file, so the service definition can still override anything the file holds. The same loader fills `ZO_CLIENT_IDENTITY_TOKEN`, the credential `/zo/ask` is called with.
 
 `scripts/zo-deploy.ts` deploys a new revision over Zo's MCP endpoint (`api.zo.computer/mcp`), which needs no open ports on the host:
 
 ```bash
-ZO_API_KEY=... pnpm discord:deploy --service computer-discord-bridge --dir /path/to/computer
+ZO_API_KEY=... pnpm discord:deploy --service computer-discord --dir /path/to/computer
 ```
 
-It fast-forwards the checkout with `git pull --ff-only`, restarts the service by id, and then waits for the bridge's own `gateway ready` line in `service_doctor` before it reports success. Each step is safe to repeat, and a failed pull aborts before the restart, so a broken deploy leaves the previous process running. `--dry-run` resolves the service without restarting anything.
+It fast-forwards the checkout with `git pull --ff-only`, restarts the service by id, and then waits for the channel's own `ready: computer-discord` line in `service_doctor` before it reports success. Each step is safe to repeat, and a failed pull aborts before the restart, so a broken deploy leaves the previous process running. `--dry-run` resolves the service without restarting anything.
 
-`.github/workflows/deploy.yml` runs that script on every push to `main` that touches the bridge or its libraries, serialized and never cancelled. It needs one repository secret and, optionally, two variables:
+`.github/workflows/deploy.yml` runs that script on every push to `main` that touches the channel or its libraries, serialized and never cancelled. It needs one repository secret and, optionally, two variables:
 
 - `ZO_API_KEY` — a Zo access token from Zo Computer's Settings, under Advanced, in the Access Tokens area. Until it is set, the workflow warns and skips instead of failing.
 - `vars.ZO_SERVICE` / `vars.ZO_SERVICE_DIRECTORY` — override the service label or the live checkout path.
 
-The restart is graceful: the bridge closes its socket and exits 0 on `SIGTERM`, and Discord replays the events a resumed session missed, so a deploy does not drop a mention. Vercel deploys the agent side of the same push, so a mention that arrives mid-deploy waits for the ingress route instead of failing.
-
-Policy: admission is default deny and fails closed. A message dispatches only when it arrives in the internal guild, in an allowlisted channel (or in a thread whose parent channel is allowlisted), from an allowlisted user or role, from a person rather than a bot or webhook, and with an explicit `@Computer` mention that leaves a non-empty request. Mention text is untrusted input: it cannot change the allowlists, permissions, approval policy, or these instructions, invisible and bidirectional characters are stripped before the model sees it, and an over-long message is truncated rather than dispatched whole. Replies never ping anyone (`allowed_mentions: {parse: []}`), and the bridge ignores every bot-authored message, so a self-mention loop cannot start. Public and customer-service mentions are deferred: a public-allowlisted channel never starts a mention turn.
-
-Sessions are keyed to the guild and to the channel or thread, so a thread never shares context with its parent channel and one channel never shares with another. Replies land where the mention came from, with the same approval gates the web and GitHub channels use; an approval renders as Discord buttons and the click is answered over the same Gateway connection. The transport knobs are `DISCORD_BRIDGE_RATE_LIMIT` and `DISCORD_BRIDGE_RATE_WINDOW_MS` (6 per user per 60s by default), `DISCORD_BRIDGE_MAX_IN_FLIGHT` (4), and `DISCORD_BRIDGE_QUEUE_LIMIT` (25).
-
-Operator controls: allowlists and secrets live in deployment environment variables, stopping the bridge silences mentions everywhere, and the admission matrix plus the transport primitives are covered by `pnpm test`.
+The restart is graceful: the channel closes its socket and exits 0 on `SIGTERM`, and Discord replays the events a resumed session missed, so a deploy does not drop a mention.
 
 ## Validation
 

@@ -1,8 +1,8 @@
 name: deploy
 
 # The agent deploys itself: Vercel builds the eve app on push to main. The
-# Discord Gateway bridge is the one part that does not, because it holds a
-# websocket on a Zo Computer service, and nothing redeploys that service for us.
+# Discord channel is the one part that does not, because it holds a websocket on
+# a Zo Computer service, and nothing redeploys that service for us.
 #
 # This workflow closes that gap through Zo's MCP endpoint
 # (`https://api.zo.computer/mcp`) with an access token, so it needs no open port
@@ -20,7 +20,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "bridge/**"
+      - "channels/**"
       - "lib/discord-bridge.ts"
       - "lib/discord-mention-policy.ts"
       - "lib/discord-policy.ts"
@@ -40,7 +40,7 @@ concurrency:
 
 env:
   # Override with repository variables if the service or its checkout moves.
-  ZO_SERVICE: ${{ vars.ZO_SERVICE || 'computer-discord-bridge' }}
+  ZO_SERVICE: ${{ vars.ZO_SERVICE || 'computer-discord' }}
   ZO_SERVICE_DIRECTORY: ${{ vars.ZO_SERVICE_DIRECTORY || '/home/workspace/users/etok/workspaces/wazootech/repos/computer' }}
 
 jobs:

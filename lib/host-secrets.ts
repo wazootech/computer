@@ -1,15 +1,19 @@
 import { existsSync, readFileSync } from "node:fs";
 
 /**
- * Names the bridge accepts from the host secrets file.
+ * Names the Discord channel accepts from the host secrets file.
  *
  * An environment variable set on the service definition always wins, so the
  * file is a fallback for credentials that are kept out of the service (and out
  * of this repository) rather than an override of it.
+ *
+ * `ZO_CLIENT_IDENTITY_TOKEN` is here because the channel calls `/zo/ask` with
+ * it: it is the credential Zo already keeps for this host, so the service
+ * definition never has to carry a second copy.
  */
-export const BRIDGE_SECRET_NAMES = [
+export const CHANNEL_SECRET_NAMES = [
   "DISCORD_BOT_TOKEN",
-  "DISCORD_BRIDGE_SECRET",
+  "ZO_CLIENT_IDENTITY_TOKEN",
   "DISCORD_APPLICATION_ID",
   "DISCORD_INTERNAL_GUILD_IDS",
   "DISCORD_INTERNAL_CHANNEL_IDS",
@@ -49,19 +53,20 @@ export function parseHostSecrets(text: string): Map<string, string> {
 }
 
 /**
- * Fills the bridge's credentials from the host's secrets file.
+ * Fills the channel's credentials from the host's secrets file.
  *
- * Zo services inherit neither the host shell environment nor the deployment's
- * variables, so a bot token and shared secret kept on the deployment would have
- * to be duplicated into the service definition. Reading the host file instead
- * keeps one copy of each credential. Nothing is overwritten: an unset variable
- * is filled, a set one is left alone.
+ * Zo services inherit neither the host shell environment nor any deployment's
+ * variables, so a bot token kept outside this repository would have to be
+ * duplicated into the service definition. Reading the host file instead keeps
+ * one copy of each credential. Nothing is overwritten: an unset variable is
+ * filled, a set one is left alone.
  */
 export function loadHostSecrets(
   env: Record<string, string | undefined> = process.env,
   paths: readonly string[] = DEFAULT_HOST_SECRET_PATHS,
   exists: (path: string) => boolean = existsSync,
   read: (path: string) => string = (path) => readFileSync(path, "utf8"),
+  names: readonly string[] = CHANNEL_SECRET_NAMES,
 ): HostSecretSource {
   const override = env.ZO_SECRETS_PATH;
   const candidates = override !== undefined && override.length > 0 ? [override, ...paths] : paths;
@@ -70,7 +75,7 @@ export function loadHostSecrets(
 
   const values = parseHostSecrets(read(path));
   const loaded: string[] = [];
-  for (const name of BRIDGE_SECRET_NAMES) {
+  for (const name of names) {
     const current = env[name];
     if (current !== undefined && current.length > 0) continue;
     const value = values.get(name);

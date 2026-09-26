@@ -12,7 +12,7 @@ const DEPLOYED_DIRECTORY = "/home/workspace/live-checkout";
 
 const SERVICE_LIST = [
   "Services (1):",
-  `  - service_id='svc_bridge123' label='computer-discord-bridge' mode='process' entrypoint='node --experimental-strip-types bridge/discord-gateway/index.ts'`,
+  `  - service_id='svc_bridge123' label='computer-discord' mode='process' entrypoint='node --experimental-strip-types channels/discord/index.ts'`,
   `    workdir='${DEPLOYED_DIRECTORY}' protocol='tcp'`,
 ].join("\n");
 
@@ -21,7 +21,7 @@ function doctorReport(input: { readonly logs: string; readonly state: string; re
     "Host status: OK",
     "",
     "Services: 1",
-    `  computer-discord-bridge: ${input.state}, uptime 00:00:${String(input.uptime).padStart(2, "0")}, pid 4812`,
+    `  computer-discord: ${input.state}, uptime 00:00:${String(input.uptime).padStart(2, "0")}, pid 4812`,
     "",
     "Logs (last 10 lines):",
     ...input.logs.split("\n").map((line) => `  ${line}`),
@@ -143,7 +143,7 @@ async function startFakeZo(): Promise<FakeZo> {
         });
       }),
     markRestarted: () => {
-      state.doctor = doctorReport({ logs: "bridge starting\ngateway ready", state: "RUNNING", uptime: 2 });
+      state.doctor = doctorReport({ logs: "channel starting\nready: computer-discord", state: "RUNNING", uptime: 2 });
     },
     setDoctor: (report: string) => {
       state.doctor = report;
@@ -172,7 +172,7 @@ async function runDeploy(fake: FakeZo, extraFlags: readonly string[] = []): Prom
       "--experimental-strip-types",
       "scripts/zo-deploy.ts",
       "--service",
-      "computer-discord-bridge",
+      "computer-discord",
       "--dir",
       DEPLOYED_DIRECTORY,
       "--timeout",
@@ -222,7 +222,7 @@ describe("zo deploy script", () => {
     assert.equal(run.status, 0, run.stderr);
     assert.deepEqual(fake.restarts, ["svc_bridge123"]);
     assert.match(run.stdout, /revision d4e5f6a/u);
-    assert.match(run.stdout, /gateway ready/u);
+    assert.match(run.stdout, /ready: computer-discord/u);
     assert.match(run.stdout, /deployed d4e5f6a/u);
     assert.deepEqual(fake.calls.slice(0, 2), ["bash", "bash"]);
     assert.equal(fake.requests[0]?.method, "initialize");

@@ -14,7 +14,7 @@
     "start": "next start",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --test lib/*.test.ts",
-    "discord:bridge": "node --experimental-strip-types bridge/discord-gateway/index.ts",
+    "discord:channel": "node --experimental-strip-types channels/discord/index.ts",
     "discord:deploy": "node --experimental-strip-types scripts/zo-deploy.ts",
     "build:eve": "eve build",
     "dev:eve": "eve dev",
