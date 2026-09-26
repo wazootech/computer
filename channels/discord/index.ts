@@ -279,6 +279,7 @@ async function handleMention(raw: unknown): Promise<void> {
     for (const [index, part] of parts.entries()) {
       await discordRequest("POST", `/channels/${admission.sessionChannelId}/messages`, {
         content: part,
+        allowed_mentions: { parse: [] },
         ...(index === 0
           ? {
               message_reference: {
