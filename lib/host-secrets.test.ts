@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  BRIDGE_SECRET_NAMES,
+  CHANNEL_SECRET_NAMES,
   loadHostSecrets,
   parseHostSecrets,
 } from "./host-secrets.ts";
@@ -9,7 +9,7 @@ import {
 const SECRETS = [
   "# Zo secrets",
   "DISCORD_BOT_TOKEN=bot-token",
-  'DISCORD_BRIDGE_SECRET="shared secret"',
+  'export ZO_CLIENT_IDENTITY_TOKEN="zo-token"',
   "export DISCORD_INTERNAL_GUILD_IDS='1525763491712737310'",
   "",
   "DISCORD_INTERNAL_CHANNEL_IDS=1525763492431331362,",
@@ -26,7 +26,7 @@ test("parses key=value lines, skipping comments and malformed entries", () => {
 
 test("strips quotes and an export prefix", () => {
   const values = parseHostSecrets(SECRETS);
-  assert.equal(values.get("DISCORD_BRIDGE_SECRET"), "shared secret");
+  assert.equal(values.get("ZO_CLIENT_IDENTITY_TOKEN"), "zo-token");
   assert.equal(values.get("DISCORD_INTERNAL_GUILD_IDS"), "1525763491712737310");
 });
 
@@ -38,7 +38,7 @@ test("fills an unset variable from the host file", () => {
   assert.equal(source.path, "/secrets");
   assert.deepEqual(source.loaded, [
     "DISCORD_BOT_TOKEN",
-    "DISCORD_BRIDGE_SECRET",
+    "ZO_CLIENT_IDENTITY_TOKEN",
     "DISCORD_INTERNAL_GUILD_IDS",
     "DISCORD_INTERNAL_CHANNEL_IDS",
   ]);
@@ -49,7 +49,7 @@ test("never overwrites a variable the service already set", () => {
   const source = loadHostSecrets(env, ["/secrets"], () => true, () => SECRETS);
   assert.equal(env.DISCORD_BOT_TOKEN, "from-service");
   assert.ok(!source.loaded.includes("DISCORD_BOT_TOKEN"));
-  assert.ok(source.loaded.includes("DISCORD_BRIDGE_SECRET"));
+  assert.ok(source.loaded.includes("ZO_CLIENT_IDENTITY_TOKEN"));
 });
 
 test("treats an empty variable as unset", () => {
@@ -82,5 +82,6 @@ test("leaves unrelated names alone", () => {
   const env: Record<string, string | undefined> = {};
   loadHostSecrets(env, ["/secrets"], () => true, () => SECRETS);
   assert.equal(env.NOT_A_BRIDGE_NAME, undefined);
-  assert.ok(BRIDGE_SECRET_NAMES.includes("DISCORD_BOT_TOKEN"));
+  assert.ok(CHANNEL_SECRET_NAMES.includes("DISCORD_BOT_TOKEN"));
+  assert.ok(CHANNEL_SECRET_NAMES.includes("ZO_CLIENT_IDENTITY_TOKEN"));
 });

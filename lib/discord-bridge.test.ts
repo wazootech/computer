@@ -1,19 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
-  DISCORD_BRIDGE_MAX_BODY_LENGTH,
-  DISCORD_BRIDGE_MAX_SIGNATURE_AGE_MS,
   DISCORD_GATEWAY_FATAL_CLOSE_CODES,
   DISCORD_GATEWAY_INTENTS,
   createDedupeCache,
-  createDiscordBridgeRequest,
   createRateLimiter,
   nextReconnectDelayMs,
-  signDiscordBridgeBody,
-  verifyDiscordBridgeRequest,
 } from "./discord-bridge.ts";
 
-const SECRET = "bridge-secret";
 const NOW = 1_776_000_000_000;
 
 describe("gateway intents", () => {
@@ -27,76 +21,6 @@ describe("gateway intents", () => {
     }
     assert.equal(DISCORD_GATEWAY_FATAL_CLOSE_CODES.includes(4000), false);
     assert.equal(DISCORD_GATEWAY_FATAL_CLOSE_CODES.includes(1006), false);
-  });
-});
-
-describe("createDiscordBridgeRequest", () => {
-  it("signs the timestamp and body together", () => {
-    const request = createDiscordBridgeRequest({ body: '{"kind":"message"}', nowMs: NOW, secret: SECRET });
-    assert.equal(request.timestamp, String(NOW));
-    assert.equal(
-      request.signature,
-      signDiscordBridgeBody({ body: request.body, secret: SECRET, timestamp: request.timestamp }),
-    );
-  });
-});
-
-describe("verifyDiscordBridgeRequest", () => {
-  const request = createDiscordBridgeRequest({ body: '{"kind":"message"}', nowMs: NOW, secret: SECRET });
-
-  it("accepts a fresh request signed with the shared secret", () => {
-    assert.equal(
-      verifyDiscordBridgeRequest({ ...request, nowMs: NOW + 1_000, secret: SECRET }),
-      true,
-    );
-  });
-
-  it("rejects a request signed with a different secret", () => {
-    assert.equal(
-      verifyDiscordBridgeRequest({ ...request, nowMs: NOW, secret: "other-secret" }),
-      false,
-    );
-  });
-
-  it("rejects a tampered body", () => {
-    assert.equal(
-      verifyDiscordBridgeRequest({ ...request, body: '{"kind":"interaction"}', nowMs: NOW, secret: SECRET }),
-      false,
-    );
-  });
-
-  it("rejects a missing secret, signature, or timestamp", () => {
-    assert.equal(verifyDiscordBridgeRequest({ ...request, nowMs: NOW, secret: "" }), false);
-    assert.equal(verifyDiscordBridgeRequest({ ...request, nowMs: NOW, secret: SECRET, signature: null }), false);
-    assert.equal(verifyDiscordBridgeRequest({ ...request, nowMs: NOW, secret: SECRET, timestamp: undefined }), false);
-  });
-
-  it("rejects a signature that is not hex, without throwing", () => {
-    assert.equal(
-      verifyDiscordBridgeRequest({ ...request, nowMs: NOW, secret: SECRET, signature: "not-a-signature" }),
-      false,
-    );
-  });
-
-  it("rejects a replayed request once the timestamp falls outside the window", () => {
-    const age = DISCORD_BRIDGE_MAX_SIGNATURE_AGE_MS;
-    assert.equal(verifyDiscordBridgeRequest({ ...request, nowMs: NOW + age, secret: SECRET }), true);
-    assert.equal(verifyDiscordBridgeRequest({ ...request, nowMs: NOW + age + 1, secret: SECRET }), false);
-  });
-
-  it("rejects a future-dated request", () => {
-    const future = createDiscordBridgeRequest({
-      body: request.body,
-      nowMs: NOW + DISCORD_BRIDGE_MAX_SIGNATURE_AGE_MS + 1,
-      secret: SECRET,
-    });
-    assert.equal(verifyDiscordBridgeRequest({ ...future, nowMs: NOW, secret: SECRET }), false);
-  });
-
-  it("rejects a body above the accepted length", () => {
-    const body = `{"content":"${"x".repeat(DISCORD_BRIDGE_MAX_BODY_LENGTH)}"}`;
-    const oversized = createDiscordBridgeRequest({ body, nowMs: NOW, secret: SECRET });
-    assert.equal(verifyDiscordBridgeRequest({ ...oversized, nowMs: NOW, secret: SECRET }), false);
   });
 });
 

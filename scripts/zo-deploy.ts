@@ -32,7 +32,7 @@ const DEFAULT_MCP_URL = "https://api.zo.computer/mcp";
 const DEFAULT_BRIDGE_DIRECTORY = "/home/workspace/users/etok/workspaces/wazootech/repos/computer";
 const DEFAULT_BRANCH = "main";
 const DEFAULT_TIMEOUT_SECONDS = 90;
-const READY_MARKERS = ["gateway ready", "gateway resumed"] as const;
+const READY_MARKERS = ["ready: computer-discord", "session resumed"] as const;
 const POLL_INTERVAL_MS = 3_000;
 
 interface Options {
