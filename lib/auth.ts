@@ -31,13 +31,9 @@ function optionalEnvironmentVariable(name: string): string | null {
 }
 
 /**
- * GitHub sign-in credentials, when the deployment has them.
- *
- * Linking a GitHub account is what gives a chat session a verified GitHub login:
- * write approvals are attributed to `githubLogin`, and the approval responder
- * check resolves that attribute against the approver-team roster. Without these
- * credentials the deployment signs in exactly as before and approvals from chat
- * report the missing login instead of guessing an identity.
+ * Optional GitHub OAuth credentials for authenticated Eve sessions that need
+ * write-approval attribution. The Zo-backed browser chat is text-only and does
+ * not use GitHub tools or approval prompts.
  */
 const githubProviderCredentials = ((): { clientId: string; clientSecret: string } | null => {
   const clientId = optionalEnvironmentVariable("GITHUB_OAUTH_CLIENT_ID");

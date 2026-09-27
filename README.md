@@ -8,7 +8,7 @@
   <em>Wazoo's operating computer for turning direction into shipped work.</em>
 </p>
 
-Computer is Wazoo's operational AI partner: the general assistant the whole team shares, modeled after the Enterprise computer from *Star Trek: The Next Generation*. It runs on [eve](https://eve.dev) and speaks through an authenticated web chat. Engineering is the one domain it runs as a supervised factory pipeline.
+Computer is Wazoo's operational AI partner: the general assistant the whole team shares, modeled after the Enterprise computer from *Star Trek: The Next Generation*. The authenticated web chat is a Vercel-hosted shell that proxies turns to Computer's Zo persona; the engineering workflow remains the Eve factory pipeline.
 
 ## Factory pipeline
 
@@ -70,11 +70,17 @@ Production deployment uses:
 eve deploy
 ```
 
-The production runtime needs `BETTER_AUTH_SECRET`, `VERCEL_APP_CLIENT_ID`, `VERCEL_APP_CLIENT_SECRET`, `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET`, `FACTORY_APPROVAL_SECRET`, and `AI_GATEWAY_API_KEY`. The Discord channel needs none of these: it runs on the Zo host, not here. Two optional variables, `GITHUB_OAUTH_CLIENT_ID` and `GITHUB_OAUTH_CLIENT_SECRET`, enable GitHub sign-in; set both or neither. When they are set, a signed-in person can link their GitHub account, and that verified login is what attributes a write approval from chat.
+The remaining Eve runtime needs `BETTER_AUTH_SECRET`, `VERCEL_APP_CLIENT_ID`, `VERCEL_APP_CLIENT_SECRET`, `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET`, `FACTORY_APPROVAL_SECRET`, and `AI_GATEWAY_API_KEY`. The Discord channel needs none of these: it runs on the Zo host, not here. `GITHUB_OAUTH_CLIENT_ID` and `GITHUB_OAUTH_CLIENT_SECRET` remain optional for authenticated Eve sessions that need GitHub write approval; the Zo-backed web chat is text-only and cannot invoke those tools.
+
+## Web chat session proxy
+
+The browser posts text turns to the Vercel route `/api/chat/:sessionId`. That route requires a same-origin request and a signed-in Better Auth session, then streams the answer from the public Zo Space route `https://etok.zo.space/api/computer-chat`, which calls the Computer persona through `/zo/ask`. The web UI is intentionally text-only: it does not expose Eve tools, approval prompts, file uploads, cancellation, or mid-turn steering. Conversation display history is saved in browser `localStorage`, keyed by the signed-in user and session; the Zo conversation id is carried in an HttpOnly, session-scoped cookie signed with HMAC-SHA-256 and bound to both ids.
+
+`COMPUTER_WEB_SECRET` must be at least 32 UTF-8 bytes and match in Vercel and Zo Space; it authenticates only the Vercel-to-Space request. `COMPUTER_CHAT_SESSION_SECRET` must also be at least 32 UTF-8 bytes, but stays in Vercel only and signs the HMAC session ticket. Generate two independent values with `openssl rand -hex 32`; add the proxy secret to Vercel Production/Preview and Zo Secrets, and the session secret to Vercel Production/Preview. Never commit either value. Neither variable was present in the production Vercel environment when this implementation was inspected, so turns will return a configuration error until both are added.
 
 ## Session repository attachment
 
-The GitHub channel stamps the repository from the verified event. A session a person starts from the web chat or the Eve HTTP API had no such stamp, so every `github__*` tool stayed unbound and work stopped at "No verified GitHub repository is attached to this session". The Eve channel now attaches a repository at request time: it resolves `owner/name` through the App installation token and stamps the same `githubRepository*` attributes the GitHub channel uses, so the tool binders and `preflight` need no special case.
+The GitHub channel stamps the repository from the verified event. An Eve HTTP API session had no such stamp, so every `github__*` tool stayed unbound and work stopped at "No verified GitHub repository is attached to this session". The Eve channel now attaches a repository at request time: it resolves `owner/name` through the App installation token and stamps the same `githubRepository*` attributes the GitHub channel uses, so the tool binders and `preflight` need no special case.
 
 - The default is `COMPUTER_SESSION_REPOSITORY`, falling back to `wazootech/workspace` (the federation manifest repo, which lists every repository in the org).
 - A request can point the session at another repository with the `x-computer-repository: owner/name` header. A malformed value fails closed.
@@ -87,15 +93,15 @@ A direct `@wazootech/computer` invocation is accepted in an issue or pull-reques
 
 ## Approval identity
 
-Every GitHub write that a person asks for is approval-gated, and the approval is only accepted from a verified member of the approver team. A GitHub issue or pull-request reply carries the sender's login, so those approvals resolve directly. A chat session has no sender, so its approvals are attributed to the signed-in person's linked GitHub account: the account id must appear in the approver-team roster, and the login from that roster is stamped on the session as `githubLogin`.
+GitHub writes from Eve sessions remain approval-gated and are accepted only from a verified member of the approver team. GitHub issue or pull-request replies carry the sender's login directly. An authenticated Eve API session without a GitHub sender can use a linked GitHub account (`githubLogin`) for approval attribution, but the Zo-backed web chat does not invoke write tools or display approval prompts.
 
-To enable it, register a GitHub OAuth App with the callback URL `https://<deployment>/api/auth/callback/github`, set `GITHUB_OAUTH_CLIENT_ID` and `GITHUB_OAUTH_CLIENT_SECRET`, and sign in with GitHub once to link the account. Without the link there is no verified login, so an approval from chat is rejected with that specific reason instead of a generic one; the GitHub path keeps working throughout.
+For those Eve sessions, register a GitHub OAuth App with callback URL `https://<deployment>/api/auth/callback/github`, set `GITHUB_OAUTH_CLIENT_ID` and `GITHUB_OAUTH_CLIENT_SECRET`, and link the account once. Without the link, an approval is rejected with the specific missing-login reason; the GitHub event path continues to work.
 
 ## Discord channel (internal mentions)
 
 Computer answers ordinary `@Computer` mentions in the configured internal Discord channel. `/ask` is retired: a mention is the only way to summon Computer, and there is no second interface to keep in sync.
 
-Discord delivers ordinary messages over its Gateway websocket, never to an application's interactions endpoint, so an always-on worker holds that connection. That worker is `channels/discord/index.ts`, and it is the whole channel: it admits a mention, asks Computer's brain, and posts the reply back into the originating channel or thread.
+Discord delivers ordinary messages over its Gateway, never to an application's interactions endpoint, so an always-on worker is required. `channels/discord/index.ts` uses `discord.js` to own the Gateway lifecycle; the channel admits a mention, asks Computer's brain, and posts the reply back into the originating channel or thread.
 
 ### Where the brain lives
 
@@ -107,13 +113,13 @@ Conversation continuity is per channel. The first turn on a channel creates a Zo
 
 ### Admission
 
-Admission is default deny, fail closed, and pure enough to test. `lib/discord-mention-policy.ts` holds the matrix (mention parsing, allowlist denial, thread-to-parent mapping, self-loop prevention, hostile-input handling), `lib/discord-policy.ts` remains the tier authority, and `lib/discord-bridge.ts` holds the transport primitives (intents, backoff, duplicate suppression, per-user rate limit).
+Admission is default deny, fail closed, and pure enough to test. `lib/discord-mention-policy.ts` holds the matrix (mention parsing, allowlist denial, thread-to-parent mapping, self-loop prevention, hostile-input handling), `lib/discord-policy.ts` remains the tier authority, and `lib/discord-bridge.ts` holds duplicate suppression and per-user rate limiting. `discord.js` manages Gateway intents, heartbeat, reconnect, and resume.
 
 A message dispatches only when it arrives in the internal guild, in an allowlisted channel (or in a thread whose parent channel is allowlisted), from an allowlisted user or role, from a person rather than a bot or webhook, and with an explicit `@Computer` mention that leaves a non-empty request. Mention text is untrusted input: it cannot change the allowlists, permissions, or these instructions, invisible and bidirectional characters are stripped before the model sees it, and an over-long message is truncated rather than dispatched whole. Replies never ping anyone (`allowed_mentions: {parse: []}`), and every bot-authored message is ignored, so a self-mention loop cannot start. Public and customer-service mentions are deferred: a public-allowlisted channel never starts a mention turn.
 
 ### Operator setup
 
-1. Create the Discord application and bot, and enable the privileged **Message Content** intent in its Bot settings. It is required for `content` to arrive at all; a socket that requests it without the portal toggle is closed with code 4014.
+1. Create the Discord application and bot, and enable the privileged **Message Content** intent in its Bot settings. It is required for `content` to arrive at all; without it, the client cannot read the message text needed to recognize mentions.
 2. Give the bot a channel permission set that can read and reply: View Channels, Send Messages, Send Messages in Threads, Read Message History, and Embed Links. No administrator permission is needed, and the `applications.commands` scope is not required.
 3. Leave the application's **Interactions Endpoint URL unset**. Nothing here verifies an inbound interaction signature any more, so no `DISCORD_PUBLIC_KEY` is needed either.
 4. Set the service environment (comma-separated ids): `DISCORD_INTERNAL_GUILD_IDS`, `DISCORD_INTERNAL_CHANNEL_IDS`, `DISCORD_INTERNAL_USER_IDS`, `DISCORD_INTERNAL_ROLE_IDS`, plus `COMPUTER_PERSONA_ID`. Set `DISCORD_INTERNAL_GUILD_WIDE=1` to let an allowlisted operator mention the bot in any channel of an allowlisted guild, not only in the allowlisted channels; the guild allowlist and the user/role allowlist still both apply, so a shared or public server stays closed.
@@ -152,14 +158,14 @@ env:        COMPUTER_PERSONA_ID,
 ZO_API_KEY=... pnpm discord:deploy --service computer-discord --dir /path/to/computer
 ```
 
-It fast-forwards the checkout with `git pull --ff-only`, restarts the service by id, and then waits for the channel's own `ready: computer-discord` line in `service_doctor` before it reports success. Each step is safe to repeat, and a failed pull aborts before the restart, so a broken deploy leaves the previous process running. `--dry-run` resolves the service without restarting anything.
+It fast-forwards the checkout with `git pull --ff-only`, installs the pinned `discord.js` package with Bun, restarts the service by id, and waits for the client's own `ready: computer-discord` line in `service_doctor` before reporting success. A failed pull or dependency install aborts before the restart, so the current process is left untouched. `--dry-run` resolves the service without installing dependencies or restarting anything.
 
 `.github/workflows/deploy.yml` runs that script on every push to `main` that touches the channel or its libraries, serialized and never cancelled. It needs one repository secret and, optionally, two variables:
 
 - `ZO_API_KEY` — a Zo access token from Zo Computer's Settings, under Advanced, in the Access Tokens area. Until it is set, the workflow warns and skips instead of failing.
 - `vars.ZO_SERVICE` / `vars.ZO_SERVICE_DIRECTORY` — override the service label or the live checkout path.
 
-The restart is graceful: the channel closes its socket and exits 0 on `SIGTERM`, and Discord replays the events a resumed session missed, so a deploy does not drop a mention.
+The process calls `client.destroy()` on `SIGTERM`. `discord.js` manages reconnect and resume while the process is running, but a service restart or a rejected resume can leave a brief gap in which messages are not recovered; the channel does not perform a REST catch-up.
 
 ## Validation
 

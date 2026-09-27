@@ -7,9 +7,9 @@ For a content-only change to the root agent's identity, purpose, tone, or respon
 ## Where Computer's brain lives
 
 Computer's brain is a Zo persona (`5f58a6ba-da81-4b8e-9105-4c85685a6a93`), not this
-Vercel app. `channels/discord/index.ts` is a thin channel that holds the Discord
-Gateway connection and calls `/zo/ask` with that persona; the persona owns the
-prompt and the model, so neither is named in code here.
+Vercel app. `channels/discord/index.ts` uses `discord.js` for the Gateway
+connection and calls `/zo/ask` with that persona; the persona owns the prompt and
+the model, so neither is named in code here.
 
 The prompt of record is `agent/instructions.ts`. When the persona changes, update
 that file to match it. `agent/**` still holds the eve agent that the Vercel app
@@ -75,10 +75,17 @@ The eve app under `agent/` is compiled into the Vercel deployment, but Computer'
 ## Where Computer's brain lives
 
 Computer's brain is a Zo persona, not this repository. `channels/discord/index.ts`
-is the channel that reaches it: one Gateway socket, admission from the pure
+is the channel that reaches it: a `discord.js` client, admission from the pure
 modules in `lib/`, one `/zo/ask` call per admitted mention, and the reply posted
 back into the channel. The persona owns the prompt and the model, so changing how
 Computer thinks is a persona edit in Zo; this repository owns the transport.
+
+The Vercel web chat is a text-only shell over the persona: its `/api/chat/:sessionId`
+route checks same-origin and Better Auth, then proxies to the public Zo Space API.
+The conversation id is stored in an HttpOnly HMAC-signed cookie bound to the user
+and session. `COMPUTER_WEB_SECRET` is a 32-byte-or-longer bearer secret shared by
+Vercel and Zo Secrets; `COMPUTER_CHAT_SESSION_SECRET` is a separate 32-byte-or-longer
+HMAC key held by Vercel only. Never put either value in the repository.
 
 The Vercel app under `app/`, `agent/`, and `lib/` is the web and GitHub surface. A
 push to `main` ships it, so a change there is live once the build lands. The
