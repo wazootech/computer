@@ -30,6 +30,7 @@ function doctorReport(input: { readonly logs: string; readonly state: string; re
 
 interface FakeZo {
   readonly calls: string[];
+  readonly commands: string[];
   readonly requests: readonly { readonly method: string; readonly sessionHeader: string | undefined }[];
   readonly restarts: string[];
   readonly urls: string;
@@ -38,6 +39,7 @@ interface FakeZo {
   readonly markRestarted: () => void;
   readonly setDoctor: (report: string) => void;
   readonly setPullReturncode: (code: number) => void;
+  readonly setInstallReturncode: (code: number) => void;
 }
 
 function jsonRpc(response: ServerResponse, id: unknown, result: unknown, options: { readonly sse?: boolean } = {}): void {
@@ -54,9 +56,11 @@ function jsonRpc(response: ServerResponse, id: unknown, result: unknown, options
 async function startFakeZo(): Promise<FakeZo> {
   const state = {
     calls: [] as string[],
+    commands: [] as string[],
     requests: [] as { method: string; sessionHeader: string | undefined }[],
     restarts: [] as string[],
     pullReturncode: 0,
+    installReturncode: 0,
     restarted: false,
     doctor: doctorReport({ logs: "bridge starting", state: "RUNNING", uptime: 600 }),
   };
@@ -94,6 +98,14 @@ async function startFakeZo(): Promise<FakeZo> {
 
       if (name === "bash") {
         const cmd = String(args.cmd);
+        state.commands.push(cmd);
+        if (cmd.includes("bun install --frozen-lockfile")) {
+          const text = state.installReturncode === 0
+            ? "CmdResult(stdout='installed\\n', stderr='', returncode=0)"
+            : "CmdResult(stdout='bun install failed\\n', stderr='', returncode=1)";
+          jsonRpc(response, message.id, { content: [{ type: "text", text }] });
+          return;
+        }
         if (cmd.includes("rev-parse --abbrev-ref")) {
           jsonRpc(response, message.id, { content: [{ type: "text", text: `CmdResult(stdout='main\\n', stderr='', returncode=0)` }] });
           return;
@@ -133,6 +145,7 @@ async function startFakeZo(): Promise<FakeZo> {
 
   return {
     calls: state.calls,
+    commands: state.commands,
     requests: state.requests,
     restarts: state.restarts,
     urls: `http://127.0.0.1:${String(address !== null && typeof address === "object" ? address.port : 0)}/mcp`,
@@ -150,6 +163,9 @@ async function startFakeZo(): Promise<FakeZo> {
     },
     setPullReturncode: (code: number) => {
       state.pullReturncode = code;
+    },
+    setInstallReturncode: (code: number) => {
+      state.installReturncode = code;
     },
   };
 }
@@ -217,11 +233,14 @@ describe("zo deploy script", () => {
 
   it("fast-forwards, restarts once, and waits for the ready log line", async () => {
     fake.restarts.length = 0;
+    fake.commands.length = 0;
     fake.markRestarted();
     const run = await runDeploy(fake);
     assert.equal(run.status, 0, run.stderr);
     assert.deepEqual(fake.restarts, ["svc_bridge123"]);
     assert.match(run.stdout, /revision d4e5f6a/u);
+    assert.match(run.stdout, /install discord\.js channel dependencies/u);
+    assert.ok(fake.commands.some((command) => command.includes("bun install --frozen-lockfile")));
     assert.match(run.stdout, /ready: computer-discord/u);
     assert.match(run.stdout, /deployed d4e5f6a/u);
     assert.deepEqual(fake.calls.slice(0, 2), ["bash", "bash"]);
@@ -240,20 +259,34 @@ describe("zo deploy script", () => {
     assert.deepEqual(fake.restarts, []);
   });
 
+  it("does not restart when installing the channel dependencies fails", async () => {
+    fake.restarts.length = 0;
+    fake.commands.length = 0;
+    fake.setInstallReturncode(1);
+    const run = await runDeploy(fake);
+    fake.setInstallReturncode(0);
+    assert.equal(run.status, 1);
+    assert.match(run.stderr, /dependency install failed/u);
+    assert.match(run.stderr, /bun install failed/u);
+    assert.deepEqual(fake.restarts, []);
+  });
+
   it("reports a service that never becomes ready", async () => {
     fake.setDoctor(doctorReport({ logs: "bridge starting\n{\"error\":\"bot identity check failed\"}", state: "FATAL", uptime: 1 }));
     const run = await runDeploy(fake, ["--timeout", "5"]);
     fake.markRestarted();
     assert.equal(run.status, 1);
-    assert.match(run.stderr, /did not report a ready gateway/u);
+    assert.match(run.stderr, /did not report a ready Discord client/u);
     assert.match(run.stderr, /FATAL/u);
   });
 
   it("resolves everything and restarts nothing on a dry run", async () => {
     fake.restarts.length = 0;
+    fake.commands.length = 0;
     const run = await runDeploy(fake, ["--dry-run"]);
     assert.equal(run.status, 0, run.stderr);
     assert.match(run.stdout, /dry run: skipping the restart/u);
+    assert.equal(fake.commands.some((command) => command.includes("bun install --frozen-lockfile")), false);
     assert.deepEqual(fake.restarts, []);
   });
 });

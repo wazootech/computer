@@ -2,7 +2,7 @@
 
 Computer's Discord channel, and Computer's whole runtime.
 
-It holds one Gateway socket as the Computer application, admits ordinary
+It uses `discord.js` to manage the Gateway connection, admits ordinary
 `@Computer` mentions against a default-deny policy, runs each admitted mention as
 a turn on the Computer Zo persona, and posts the answer back into the channel or
 thread it arrived in.
@@ -23,13 +23,18 @@ DISCORD_INTERNAL_ROLE_IDS=... \
 node --experimental-strip-types channels/discord/index.ts
 ```
 
-From the repository root that is `pnpm discord:channel`.
+Install the channel's pinned dependency from the repository root, then start it:
+
+```sh
+bun install --cwd channels/discord --frozen-lockfile
+pnpm discord:channel
+```
 
 Environment:
 
 | Name | Meaning |
 | --- | --- |
-| `COMPUTER_DISCORD_BOT_TOKEN` | Bot token for the Gateway connection and reply posts. Falls back to `DISCORD_BOT_TOKEN`. |
+| `COMPUTER_DISCORD_BOT_TOKEN` | Bot token used by discord.js to connect and post replies. Falls back to `DISCORD_BOT_TOKEN`. |
 | `COMPUTER_PERSONA_ID` | The Computer Zo persona. Defaults to the deployed persona id. |
 | `ZO_API_TOKEN` | Zo credential for `/zo/ask`. Falls back to `ZO_CLIENT_IDENTITY_TOKEN`. |
 | `DISCORD_INTERNAL_GUILD_IDS` | Allowlisted guild(s), comma-separated. |
@@ -60,8 +65,9 @@ start.
 The admission matrix lives in the tested modules next to this channel:
 `lib/discord-mention-policy.ts` (mention parsing, thread-to-parent mapping,
 self-loop prevention, hostile input), `lib/discord-policy.ts` (tier resolution),
-and `lib/discord-bridge.ts` (intents, reconnect backoff, duplicate suppression,
-per-user rate limit).
+and `lib/discord-bridge.ts` (duplicate suppression and per-user rate limits).
+The `discord.js` client owns the Gateway intents, heartbeat, reconnect, and
+resume lifecycle.
 
 ## Conversation state
 
@@ -72,9 +78,8 @@ state and is gitignored; deleting it starts every channel a fresh conversation.
 ## Operator setup
 
 1. Create the Discord application and bot, and enable the privileged **Message
-   Content** intent. Without it `content` never arrives, and a socket that asks
-   for it anyway is closed with code 4014 (the log says so, and retries slowly
-   rather than hot-looping).
+   Content** intent. Without it the client cannot receive the message text needed
+   to recognize and answer mentions.
 2. Give the bot View Channels, Send Messages, Send Messages in Threads, Read
    Message History, and Embed Links. No administrator permission is needed.
 3. Leave the application's **Interactions Endpoint URL unset**. Nothing here

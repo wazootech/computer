@@ -6,12 +6,11 @@ import {
   type DiscordMentionEvent,
   discordMentionSessionToken,
   hasBotMention,
-  readDiscordMentionEvent,
   resolveDiscordMentionAdmission,
   sanitizeMentionPrompt,
 } from "./discord-mention-policy.ts";
 
-/** The Computer bot's own user id, as the Gateway's identity reports it. */
+/** The Computer bot's own user id, as discord.js reports it after login. */
 const BOT_USER_ID = "900000000000000001";
 const OTHER_USER_ID = "900000000000000002";
 
@@ -40,59 +39,6 @@ function mentionEvent(overrides: Partial<DiscordMentionEvent> = {}): DiscordMent
     ...overrides,
   };
 }
-
-describe("readDiscordMentionEvent", () => {
-  it("normalizes the fields the policy reads", () => {
-    const event = readDiscordMentionEvent({
-      author: { bot: false, id: "user-alice", username: "alice" },
-      channel_id: "chan-team",
-      content: "hello",
-      guild_id: "guild-internal",
-      id: "msg-1",
-      member: { roles: ["role-staff", 7] },
-      thread: { parent_id: "chan-parent" },
-      type: 0,
-    });
-
-    assert.deepEqual(event, {
-      author: { bot: false, id: "user-alice", webhook: false },
-      authorUsername: "alice",
-      channelId: "chan-team",
-      content: "hello",
-      guildId: "guild-internal",
-      memberRoleIds: ["role-staff"],
-      messageId: "msg-1",
-      messageType: 0,
-      parentChannelId: "chan-parent",
-    });
-  });
-
-  it("treats a webhook id as a webhook author and tolerates a missing thread or member", () => {
-    const event = readDiscordMentionEvent({
-      author: { id: "hook" },
-      channel_id: "chan-team",
-      id: "msg-2",
-      webhook_id: "hook-1",
-    });
-
-    assert.equal(event?.author.webhook, true);
-    assert.equal(event?.author.bot, false);
-    assert.equal(event?.memberRoleIds.length, 0);
-    assert.equal(event?.parentChannelId, null);
-    assert.equal(event?.guildId, null);
-    assert.equal(event?.content, "");
-    assert.equal(event?.messageType, 0);
-  });
-
-  it("returns null when the payload cannot be read as a message", () => {
-    assert.equal(readDiscordMentionEvent(null), null);
-    assert.equal(readDiscordMentionEvent([]), null);
-    assert.equal(readDiscordMentionEvent("hello"), null);
-    assert.equal(readDiscordMentionEvent({ channel_id: "chan-team" }), null);
-    assert.equal(readDiscordMentionEvent({ author: { id: "user-alice" }, id: "msg-3" }), null);
-    assert.equal(readDiscordMentionEvent({ author: { id: "user-alice" }, channel_id: "chan-team" }), null);
-  });
-});
 
 describe("hasBotMention", () => {
   it("counts either user mention form", () => {
