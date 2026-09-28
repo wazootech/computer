@@ -76,7 +76,7 @@ The remaining Eve runtime needs `BETTER_AUTH_SECRET`, `VERCEL_APP_CLIENT_ID`, `V
 
 The browser posts text turns to the Vercel route `/api/chat/:sessionId`. That route requires a same-origin request and a signed-in Better Auth session, then streams the answer from the public Zo Space route `https://etok.zo.space/api/computer-chat`, which calls the Computer persona through `/zo/ask`. The web UI is intentionally text-only: it does not expose Eve tools, approval prompts, file uploads, cancellation, or mid-turn steering. Conversation display history is saved in browser `localStorage`, keyed by the signed-in user and session; the Zo conversation id is carried in an HttpOnly, session-scoped cookie signed with HMAC-SHA-256 and bound to both ids.
 
-`COMPUTER_WEB_SECRET` must be at least 32 UTF-8 bytes and match in Vercel and Zo Space; it authenticates only the Vercel-to-Space request. `COMPUTER_CHAT_SESSION_SECRET` must also be at least 32 UTF-8 bytes, but stays in Vercel only and signs the HMAC session ticket. Generate two independent values with `openssl rand -hex 32`; add the proxy secret to Vercel Production/Preview and Zo Secrets, and the session secret to Vercel Production/Preview. Never commit either value. Neither variable was present in the production Vercel environment when this implementation was inspected, so turns will return a configuration error until both are added.
+`COMPUTER_CHAT_ZO_API_KEY` is a dedicated Zo Access Token used only by the Zo Space route when it calls `/zo/ask`; store it in Zo Secrets, never in Vercel or the browser. `COMPUTER_WEB_SECRET` must be at least 32 UTF-8 bytes and match in Vercel and Zo Space; it authenticates only the Vercel-to-Space request. `COMPUTER_CHAT_SESSION_SECRET` must also be at least 32 UTF-8 bytes, stays in Vercel only, and signs the HMAC session ticket. These are three different secrets with different purposes; never reuse the Zo API key as either web secret.
 
 ## Session repository attachment
 
@@ -150,19 +150,19 @@ env:        COMPUTER_PERSONA_ID,
             DISCORD_INTERNAL_USER_IDS, DISCORD_INTERNAL_ROLE_IDS
 ```
 
-`DISCORD_BOT_TOKEN` stays out of that definition. A managed service inherits neither the host shell nor any deployment's variables, so its value is read from the host secrets file (`/root/.zo_secrets`, the same file the other Zo-hosted bots read; override with `ZO_SECRETS_PATH`) before anything reads the environment. An environment value always wins over the file, so the service definition can still override anything the file holds. The same loader fills `ZO_CLIENT_IDENTITY_TOKEN`, the credential `/zo/ask` is called with.
+`DISCORD_BOT_TOKEN` stays out of that definition. A managed service inherits neither the host shell nor any deployment's variables, so its value is read from the host secrets file (`/root/.zo_secrets`, the same file the other Zo-hosted bots read; override with `ZO_SECRETS_PATH`) before anything reads the environment. An environment value always wins over the file, so the service definition can still override anything the file holds. The same loader fills `COMPUTER_DISCORD_ZO_API_KEY`, a dedicated Zo Access Token for this bot.
 
 `scripts/zo-deploy.ts` deploys a new revision over Zo's MCP endpoint (`api.zo.computer/mcp`), which needs no open ports on the host:
 
 ```bash
-ZO_API_KEY=... pnpm discord:deploy --service computer-discord --dir /path/to/computer
+COMPUTER_DEPLOY_ZO_API_KEY=... pnpm discord:deploy --service computer-discord --dir /path/to/computer
 ```
 
 It fast-forwards the checkout with `git pull --ff-only`, installs the pinned `discord.js` package with Bun, restarts the service by id, and waits for the client's own `ready: computer-discord` line in `service_doctor` before reporting success. A failed pull or dependency install aborts before the restart, so the current process is left untouched. `--dry-run` resolves the service without installing dependencies or restarting anything.
 
 `.github/workflows/deploy.yml` runs that script on every push to `main` that touches the channel or its libraries, serialized and never cancelled. It needs one repository secret and, optionally, two variables:
 
-- `ZO_API_KEY` — a Zo access token from Zo Computer's Settings, under Advanced, in the Access Tokens area. Until it is set, the workflow warns and skips instead of failing.
+- `COMPUTER_DEPLOY_ZO_API_KEY` — a dedicated Zo Access Token for this deploy workflow, saved as a GitHub Actions secret. Until it is set, the workflow warns and skips instead of failing. Do not reuse the chat or Discord token.
 - `vars.ZO_SERVICE` / `vars.ZO_SERVICE_DIRECTORY` — override the service label or the live checkout path.
 
 The process calls `client.destroy()` on `SIGTERM`. `discord.js` manages reconnect and resume while the process is running, but a service restart or a rejected resume can leave a brief gap in which messages are not recovered; the channel does not perform a REST catch-up.

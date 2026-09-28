@@ -78,14 +78,18 @@ Computer's brain is a Zo persona, not this repository. `channels/discord/index.t
 is the channel that reaches it: a `discord.js` client, admission from the pure
 modules in `lib/`, one `/zo/ask` call per admitted mention, and the reply posted
 back into the channel. The persona owns the prompt and the model, so changing how
-Computer thinks is a persona edit in Zo; this repository owns the transport.
+Computer thinks is a persona edit in Zo; this repository owns the transport. The
+Discord process uses its own `COMPUTER_DISCORD_ZO_API_KEY` from host secrets; do
+not share the chat or deploy token with it.
 
 The Vercel web chat is a text-only shell over the persona: its `/api/chat/:sessionId`
 route checks same-origin and Better Auth, then proxies to the public Zo Space API.
 The conversation id is stored in an HttpOnly HMAC-signed cookie bound to the user
-and session. `COMPUTER_WEB_SECRET` is a 32-byte-or-longer bearer secret shared by
-Vercel and Zo Secrets; `COMPUTER_CHAT_SESSION_SECRET` is a separate 32-byte-or-longer
-HMAC key held by Vercel only. Never put either value in the repository.
+and session. The Zo Space route uses its own `COMPUTER_CHAT_ZO_API_KEY` from Zo
+Secrets for `/zo/ask`; it never goes to Vercel or the browser. `COMPUTER_WEB_SECRET`
+is a 32-byte-or-longer bearer secret shared by Vercel and Zo Secrets, while
+`COMPUTER_CHAT_SESSION_SECRET` is a separate 32-byte-or-longer HMAC key held by
+Vercel only. Never put any value in the repository.
 
 The Vercel app under `app/`, `agent/`, and `lib/` is the web and GitHub surface. A
 push to `main` ships it, so a change there is live once the build lands. The
