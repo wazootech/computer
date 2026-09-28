@@ -13,7 +13,7 @@
  * with Bun before restarting the service.
  *
  * Usage:
- *   ZO_API_KEY=... node --experimental-strip-types scripts/zo-deploy.ts \
+ *   COMPUTER_DEPLOY_ZO_API_KEY=... node --experimental-strip-types scripts/zo-deploy.ts \
  *     --service computer-discord-bridge --dir <checkout-on-the-zo-host>
  *
  * Flags: --service, --dir, --branch, --expect-sha, --timeout, --dry-run, --help.
@@ -65,7 +65,7 @@ function readOptions(): Options {
         `  --timeout <seconds> readiness deadline (default ${DEFAULT_TIMEOUT_SECONDS})`,
         "  --dry-run           resolve the service and report, restart nothing",
         "",
-        "Environment: ZO_API_KEY (required), ZO_MCP_URL (optional).",
+        "Environment: COMPUTER_DEPLOY_ZO_API_KEY (required), ZO_MCP_URL (optional).",
       ].join("\n"),
     );
     process.exit(0);
@@ -73,8 +73,8 @@ function readOptions(): Options {
 
   const service = option("service");
   if (service === undefined) throw new Error("missing --service");
-  const apiKey = process.env.ZO_API_KEY ?? "";
-  if (apiKey === "") throw new Error("missing ZO_API_KEY (Zo Settings > Advanced > Access Tokens)");
+  const apiKey = process.env.COMPUTER_DEPLOY_ZO_API_KEY ?? "";
+  if (apiKey === "") throw new Error("missing COMPUTER_DEPLOY_ZO_API_KEY (Zo Settings > Advanced > Access Tokens)");
   const timeout = Number(option("timeout") ?? DEFAULT_TIMEOUT_SECONDS);
 
   return {

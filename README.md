@@ -144,19 +144,19 @@ env:        COMPUTER_PERSONA_ID,
             DISCORD_INTERNAL_USER_IDS, DISCORD_INTERNAL_ROLE_IDS
 ```
 
-`DISCORD_BOT_TOKEN` stays out of that definition. A managed service inherits neither the host shell nor any deployment's variables, so its value is read from the host secrets file (`/root/.zo_secrets`, the same file the other Zo-hosted bots read; override with `ZO_SECRETS_PATH`) before anything reads the environment. An environment value always wins over the file, so the service definition can still override anything the file holds. The same loader fills `ZO_CLIENT_IDENTITY_TOKEN`, the credential `/zo/ask` is called with.
+`DISCORD_BOT_TOKEN` stays out of that definition. A managed service inherits neither the host shell nor any deployment's variables, so its value is read from the host secrets file (`/root/.zo_secrets`, the same file the other Zo-hosted bots read; override with `ZO_SECRETS_PATH`) before anything reads the environment. An environment value always wins over the file, so the service definition can still override anything the file holds. The same loader fills `COMPUTER_DISCORD_ZO_API_KEY`, a dedicated Zo Access Token for this bot.
 
 `scripts/zo-deploy.ts` deploys a new revision over Zo's MCP endpoint (`api.zo.computer/mcp`), which needs no open ports on the host:
 
 ```bash
-ZO_API_KEY=... pnpm discord:deploy --service computer-discord --dir /path/to/computer
+COMPUTER_DEPLOY_ZO_API_KEY=... pnpm discord:deploy --service computer-discord --dir /path/to/computer
 ```
 
 It fast-forwards the checkout with `git pull --ff-only`, installs the pinned `discord.js` package with Bun, restarts the service by id, and waits for the client's own `ready: computer-discord` line in `service_doctor` before it reports success. A failed pull or dependency install aborts before the restart, so the running process is left untouched. `--dry-run` resolves the service without installing dependencies or restarting anything.
 
 `.github/workflows/deploy.yml` runs that script on every push to `main` that touches the channel or its libraries, serialized and never cancelled. It needs one repository secret and, optionally, two variables:
 
-- `ZO_API_KEY` — a Zo access token from Zo Computer's Settings, under Advanced, in the Access Tokens area. Until it is set, the workflow warns and skips instead of failing.
+- `COMPUTER_DEPLOY_ZO_API_KEY` — a dedicated Zo Access Token for this deploy workflow, saved as a GitHub Actions secret. Until it is set, the workflow warns and skips instead of failing. Do not reuse the chat or Discord token.
 - `vars.ZO_SERVICE` / `vars.ZO_SERVICE_DIRECTORY` — override the service label or the live checkout path.
 
 The process calls `client.destroy()` on `SIGTERM`. `discord.js` manages reconnect and resume while the process is running, but a service restart or a rejected resume can leave a brief gap in which messages are not recovered; the channel does not perform a REST catch-up.

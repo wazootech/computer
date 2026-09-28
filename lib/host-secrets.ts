@@ -7,13 +7,12 @@ import { existsSync, readFileSync } from "node:fs";
  * file is a fallback for credentials that are kept out of the service (and out
  * of this repository) rather than an override of it.
  *
- * `ZO_CLIENT_IDENTITY_TOKEN` is here because the channel calls `/zo/ask` with
- * it: it is the credential Zo already keeps for this host, so the service
- * definition never has to carry a second copy.
+ * `COMPUTER_DISCORD_ZO_API_KEY` is a dedicated Zo Access Token for this
+ * channel's `/zo/ask` calls, separate from credentials used by other services.
  */
 export const CHANNEL_SECRET_NAMES = [
   "DISCORD_BOT_TOKEN",
-  "ZO_CLIENT_IDENTITY_TOKEN",
+  "COMPUTER_DISCORD_ZO_API_KEY",
   "DISCORD_APPLICATION_ID",
   "DISCORD_INTERNAL_GUILD_IDS",
   "DISCORD_INTERNAL_CHANNEL_IDS",

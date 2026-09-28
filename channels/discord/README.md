@@ -36,7 +36,7 @@ Environment:
 | --- | --- |
 | `COMPUTER_DISCORD_BOT_TOKEN` | Bot token used by discord.js to connect and post replies. Falls back to `DISCORD_BOT_TOKEN`. |
 | `COMPUTER_PERSONA_ID` | The Computer Zo persona. Defaults to the deployed persona id. |
-| `ZO_API_TOKEN` | Zo credential for `/zo/ask`. Falls back to `ZO_CLIENT_IDENTITY_TOKEN`. |
+| `COMPUTER_DISCORD_ZO_API_KEY` | Dedicated Zo Access Token for this bot's `/zo/ask` calls; do not share it with chat or deploy. |
 | `DISCORD_INTERNAL_GUILD_IDS` | Allowlisted guild(s), comma-separated. |
 | `DISCORD_INTERNAL_CHANNEL_IDS` | Allowlisted channel(s), comma-separated. |
 | `DISCORD_INTERNAL_USER_IDS` | Allowlisted user id(s), comma-separated. |
@@ -46,7 +46,7 @@ Environment:
 | `COMPUTER_TURN_TIMEOUT_MS` | Per-turn deadline. Defaults to 600000. |
 
 A managed service inherits neither the host shell nor any deployment's
-environment, so `COMPUTER_DISCORD_BOT_TOKEN` and `ZO_CLIENT_IDENTITY_TOKEN` are
+environment, so `COMPUTER_DISCORD_BOT_TOKEN` and `COMPUTER_DISCORD_ZO_API_KEY` are
 read from `/root/.zo_secrets` when they are unset (override the path with
 `ZO_SECRETS_PATH`). An environment value always wins over the file.
 

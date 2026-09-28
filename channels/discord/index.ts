@@ -17,8 +17,7 @@ import { DEFAULT_HOST_SECRET_PATHS, parseHostSecrets } from "../../lib/host-secr
 const CHANNEL_SECRET_NAMES = [
   "COMPUTER_DISCORD_BOT_TOKEN",
   "DISCORD_BOT_TOKEN",
-  "ZO_API_TOKEN",
-  "ZO_CLIENT_IDENTITY_TOKEN",
+  "COMPUTER_DISCORD_ZO_API_KEY",
   "DISCORD_INTERNAL_GUILD_IDS",
   "DISCORD_INTERNAL_CHANNEL_IDS",
   "DISCORD_INTERNAL_USER_IDS",
@@ -59,7 +58,7 @@ mkdirSync(DATA_DIR, { recursive: true });
 const CONVERSATIONS_FILE = join(DATA_DIR, "conversations.json");
 
 const BOT_TOKEN = readEnv("COMPUTER_DISCORD_BOT_TOKEN", readEnv("DISCORD_BOT_TOKEN"));
-const ZO_TOKEN = readEnv("ZO_API_TOKEN", readEnv("ZO_CLIENT_IDENTITY_TOKEN"));
+const DISCORD_ZO_API_KEY = readEnv("COMPUTER_DISCORD_ZO_API_KEY");
 const PERSONA_ID = readEnv("COMPUTER_PERSONA_ID", "5f58a6ba-da81-4b8e-9105-4c85685a6a93");
 const ZO_API = readEnv("COMPUTER_ZO_API", "https://api.zo.computer").replace(/\/+$/, "");
 const TURN_TIMEOUT_MS = Number(readEnv("COMPUTER_TURN_TIMEOUT_MS", "600000"));
@@ -108,12 +107,12 @@ function chunkReply(text: string, size = MAX_REPLY_CHARS): readonly string[] {
 }
 
 async function askComputer(prompt: string, conversationKey: string): Promise<string> {
-  if (ZO_TOKEN.length === 0) throw new Error("no Zo token: set ZO_API_TOKEN or ZO_CLIENT_IDENTITY_TOKEN");
+  if (DISCORD_ZO_API_KEY.length === 0) throw new Error("no Zo token: set COMPUTER_DISCORD_ZO_API_KEY");
   const existing = readConversation(conversationKey);
   const response = await fetch(`${ZO_API}/zo/ask`, {
     method: "POST",
     headers: {
-      authorization: `Bearer ${ZO_TOKEN}`,
+      authorization: `Bearer ${DISCORD_ZO_API_KEY}`,
       "content-type": "application/json",
       accept: "application/json",
     },

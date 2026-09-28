@@ -197,7 +197,7 @@ async function runDeploy(fake: FakeZo, extraFlags: readonly string[] = []): Prom
     ],
     {
       cwd: REPOSITORY_ROOT,
-      env: { ...process.env, ZO_API_KEY: "test-key", ZO_MCP_URL: fake.urls },
+      env: { ...process.env, COMPUTER_DEPLOY_ZO_API_KEY: "test-key", ZO_MCP_URL: fake.urls },
     },
   );
 
