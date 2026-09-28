@@ -63,7 +63,7 @@ export async function POST(
       method: "POST",
       headers: {
         Accept: "text/event-stream",
-        Authorization: `Bearer ${proxySecret}`,
+        "X-Computer-Web-Secret": proxySecret,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
