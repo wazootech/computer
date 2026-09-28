@@ -1,18 +1,11 @@
 /**
  * Admission policy for ordinary Discord `@Computer` mentions in the internal
- * channel.
+ * channel. The Discord.js adapter normalizes message objects before passing them
+ * here; this module owns only deterministic policy decisions.
  *
- * Discord delivers ordinary messages over the Gateway, not to an interactions
- * endpoint, so mention admission lives in its own policy module beside
- * {@link ./discord-policy.ts}, which continues to own the guild/channel/user/
- * role tier resolution.
- *
- * Pure and dependency-free, so the admission matrix, mention parsing, session
- * mapping, self-loop prevention, and hostile-input handling are directly
- * testable. Both the Gateway bridge and the agent's ingress route run this
- * policy: the bridge uses it to drop obvious noise early, and the ingress route
- * re-runs it on the bridge's payload so the deployment, not the transport,
- * makes the decision.
+ * The module stays dependency-light so admission, mention parsing, session
+ * mapping, self-loop prevention, and hostile-input handling can be tested
+ * without a live Discord client.
  */
 
 import { type DiscordPolicyConfig, resolveDiscordAccess } from "./discord-policy.ts";
@@ -75,7 +68,7 @@ export interface DiscordMentionAdmission {
 
 export interface DiscordMentionContext {
   /**
-   * The Computer bot's own user id, taken from the Gateway's authenticated
+   * The Computer bot's own user id, taken from discord.js's authenticated
    * identity. Never read from message text.
    */
   readonly botUserId: string;
@@ -92,51 +85,6 @@ const TRUNCATION_MARKER = "\n\n[message truncated]";
 
 /** Built-in Discord mention markup: `<@id>`, `<@!id>`, `<@&roleId>`, `<#channelId>`. */
 const MENTION_PATTERN = /<@([!&]?)(\d+)>|<#(\d+)>/g;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function readNonEmptyString(value: unknown): string | null {
-  return typeof value === "string" && value.trim().length > 0 ? value : null;
-}
-
-/**
- * Normalizes one raw Discord `MESSAGE_CREATE` payload into the shape the policy
- * consumes. Returns null when the payload cannot be read as a guild message.
- */
-export function readDiscordMentionEvent(raw: unknown): DiscordMentionEvent | null {
-  if (!isRecord(raw)) return null;
-
-  const messageId = readNonEmptyString(raw.id);
-  const channelId = readNonEmptyString(raw.channel_id);
-  const author = isRecord(raw.author) ? raw.author : null;
-  const authorId = author === null ? null : readNonEmptyString(author.id);
-  if (messageId === null || channelId === null || authorId === null) return null;
-
-  const thread = isRecord(raw.thread) ? raw.thread : null;
-  const member = isRecord(raw.member) ? raw.member : null;
-  const roles =
-    member !== null && Array.isArray(member.roles)
-      ? member.roles.filter((role): role is string => typeof role === "string")
-      : [];
-
-  return {
-    author: {
-      bot: author?.bot === true,
-      id: authorId,
-      webhook: author?.webhook === true || readNonEmptyString(raw.webhook_id) !== null,
-    },
-    authorUsername: readNonEmptyString(author?.username),
-    channelId,
-    content: typeof raw.content === "string" ? raw.content : "",
-    guildId: readNonEmptyString(raw.guild_id),
-    memberRoleIds: roles,
-    messageId,
-    messageType: typeof raw.type === "number" ? raw.type : 0,
-    parentChannelId: thread === null ? null : readNonEmptyString(thread.parent_id),
-  };
-}
 
 /**
  * Whether the message text contains an explicit mention of the Computer user.

@@ -1,18 +1,19 @@
 #!/usr/bin/env node
 /**
- * Deploys the Discord Gateway bridge to its live Zo Computer service.
+ * Deploys the discord.js channel to its live Zo Computer service.
  *
  * The bridge runs 24/7 as a Zo process service on the machine that hosts the
  * repository checkout. This script is the deploy step: it fast-forwards the
  * live checkout to the branch that was just pushed, restarts the service, and
  * then proves the restart landed by polling `service_doctor` for a running
- * process whose log carries the bridge's own readiness line.
+ * process whose log carries the client's own readiness line.
  *
- * It speaks JSON-RPC to Zo's MCP endpoint (streamable HTTP, bearer token), so
- * it needs no dependencies and can run straight from a GitHub Actions runner.
+ * It speaks JSON-RPC to Zo's MCP endpoint (streamable HTTP, bearer token) from
+ * the GitHub Actions runner. On the host it installs the locked channel package
+ * with Bun before restarting the service.
  *
  * Usage:
- *   ZO_API_KEY=... node --experimental-strip-types scripts/zo-deploy.ts \
+ *   COMPUTER_DEPLOY_ZO_API_KEY=... node --experimental-strip-types scripts/zo-deploy.ts \
  *     --service computer-discord-bridge --dir <checkout-on-the-zo-host>
  *
  * Flags: --service, --dir, --branch, --expect-sha, --timeout, --dry-run, --help.
@@ -32,7 +33,7 @@ const DEFAULT_MCP_URL = "https://api.zo.computer/mcp";
 const DEFAULT_BRIDGE_DIRECTORY = "/home/workspace/users/etok/workspaces/wazootech/repos/computer";
 const DEFAULT_BRANCH = "main";
 const DEFAULT_TIMEOUT_SECONDS = 90;
-const READY_MARKERS = ["ready: computer-discord", "session resumed"] as const;
+const READY_MARKERS = ["ready: computer-discord"] as const;
 const POLL_INTERVAL_MS = 3_000;
 
 interface Options {
@@ -55,7 +56,7 @@ function readOptions(): Options {
   if (process.argv.includes("--help") || process.argv.includes("-h")) {
     console.log(
       [
-        "Deploy the Discord Gateway bridge to its live Zo service.",
+        "Deploy the discord.js channel to its live Zo service.",
         "",
         "  --service <label>   Zo service label to restart (required)",
         `  --dir <path>        live checkout on the Zo host (default ${DEFAULT_BRIDGE_DIRECTORY})`,
@@ -64,7 +65,7 @@ function readOptions(): Options {
         `  --timeout <seconds> readiness deadline (default ${DEFAULT_TIMEOUT_SECONDS})`,
         "  --dry-run           resolve the service and report, restart nothing",
         "",
-        "Environment: ZO_API_KEY (required), ZO_MCP_URL (optional).",
+        "Environment: COMPUTER_DEPLOY_ZO_API_KEY (required), ZO_MCP_URL (optional).",
       ].join("\n"),
     );
     process.exit(0);
@@ -72,8 +73,8 @@ function readOptions(): Options {
 
   const service = option("service");
   if (service === undefined) throw new Error("missing --service");
-  const apiKey = process.env.ZO_API_KEY ?? "";
-  if (apiKey === "") throw new Error("missing ZO_API_KEY (Zo Settings > Advanced > Access Tokens)");
+  const apiKey = process.env.COMPUTER_DEPLOY_ZO_API_KEY ?? "";
+  if (apiKey === "") throw new Error("missing COMPUTER_DEPLOY_ZO_API_KEY (Zo Settings > Advanced > Access Tokens)");
   const timeout = Number(option("timeout") ?? DEFAULT_TIMEOUT_SECONDS);
 
   return {
@@ -211,6 +212,23 @@ async function fastForward(zo: ZoMcp, options: Options): Promise<string> {
   return sha;
 }
 
+function shellQuote(value: string): string {
+  return "'" + value.replaceAll("'", "'\\''") + "'";
+}
+
+async function installChannelDependencies(zo: ZoMcp, options: Options): Promise<void> {
+  const directory = `${options.directory.replace(/\/+$/u, "")}/channels/discord`;
+  const result = await runCommand(
+    zo,
+    `cd ${shellQuote(directory)} && bun install --frozen-lockfile 2>&1`,
+  );
+  console.log(result.stdout.trim());
+  if (result.returncode !== 0) {
+    const details = (result.stderr || result.stdout).trim();
+    throw new Error(`Discord channel dependency install failed; the running service was left untouched: ${details}`);
+  }
+}
+
 async function resolveService(zo: ZoMcp, options: Options): Promise<ZoServiceEntry> {
   const listed = await zo.callTool("list_user_services", {});
   assertOk(listed, "list_user_services");
@@ -250,7 +268,7 @@ async function awaitReadiness(
     await delay(POLL_INTERVAL_MS);
   }
   throw new Error(
-    `service did not report a ready gateway within ${String(options.timeoutSeconds)}s; last status: ${
+    `service did not report a ready Discord client within ${String(options.timeoutSeconds)}s; last status: ${
       last === null ? "unavailable" : `${last.state} uptime ${String(last.uptimeSeconds)}s\n${last.logs}`
     }`,
   );
@@ -286,6 +304,9 @@ async function main(): Promise<void> {
     console.log("\ndry run: skipping the restart");
     return;
   }
+
+  step("install discord.js channel dependencies");
+  await installChannelDependencies(zo, options);
 
   step(`restart ${service.serviceId}`);
   const restarted = await zo.callTool("update_user_service", { service_id: service.serviceId });

@@ -1,15 +1,15 @@
 name: deploy
 
 # The agent deploys itself: Vercel builds the eve app on push to main. The
-# Discord channel is the one part that does not, because it holds a websocket on
-# a Zo Computer service, and nothing redeploys that service for us.
+# Discord channel is the one part that does not, because it runs as an always-on
+# Zo Computer service, and nothing redeploys that service for us.
 #
 # This workflow closes that gap through Zo's MCP endpoint
 # (`https://api.zo.computer/mcp`) with an access token, so it needs no open port
 # on the host and no `/zo/ask` call. `scripts/zo-deploy.ts` is the client: it
-# fast-forwards the live checkout, restarts the service, and waits for the
-# bridge's own ready line before reporting success. A failed fast-forward stops
-# before the restart, so the previous process keeps serving.
+# fast-forwards the live checkout, installs its locked discord.js dependency,
+# restarts the service, and waits for the client's ready line before reporting
+# success. A failed pull or install stops before the restart.
 #
 # The same typed surface is available from `zocomputer-tools`
 # (https://github.com/EthanThatOneKid/zocomputer-tools). The deploy path keeps
@@ -56,11 +56,11 @@ jobs:
       - name: Check the deploy credential
         id: credential
         env:
-          ZO_API_KEY: ${{ secrets.ZO_API_KEY }}
+          COMPUTER_DEPLOY_ZO_API_KEY: ${{ secrets.COMPUTER_DEPLOY_ZO_API_KEY }}
         run: |
-          if [ -z "${ZO_API_KEY}" ]; then
+          if [ -z "${COMPUTER_DEPLOY_ZO_API_KEY}" ]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::ZO_API_KEY is not set, so nothing was deployed. The runbook in README.md covers the token and the service."
+            echo "::warning::COMPUTER_DEPLOY_ZO_API_KEY is not set, so nothing was deployed. The runbook in README.md covers the token and the service."
           else
             echo "configured=true" >> "$GITHUB_OUTPUT"
           fi
@@ -68,7 +68,7 @@ jobs:
       - name: Deploy the live Zo service
         if: steps.credential.outputs.configured == 'true'
         env:
-          ZO_API_KEY: ${{ secrets.ZO_API_KEY }}
+          COMPUTER_DEPLOY_ZO_API_KEY: ${{ secrets.COMPUTER_DEPLOY_ZO_API_KEY }}
         run: |
           node --experimental-strip-types scripts/zo-deploy.ts \
             --service "${ZO_SERVICE}" \
