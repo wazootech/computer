@@ -52,6 +52,10 @@ function dispatchZoEvent(block: string, state: ZoEventState, onText: (text: stri
     if (line.startsWith("event:")) event = line.slice(6).trim();
     else if (line.startsWith("data:")) data.push(line.slice(5).replace(/^ /, ""));
   }
+  if (event === "End" && data.length === 0) {
+    state.completed = true;
+    return;
+  }
   if (data.length === 0) return;
 
   let payload: unknown;

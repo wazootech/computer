@@ -48,6 +48,18 @@ describe("Zo SSE parsing", () => {
     assert.deepEqual(output, ["Done"]);
   });
 
+  it("accepts an End event without a data payload", async () => {
+    const output: string[] = [];
+    await consumeZoSse(
+      streamFromChunks([
+        'event: FrontendModelResponse\ndata: {"content":"ok"}\n\n',
+        "event: End\n\n",
+      ]),
+      (text) => output.push(text),
+    );
+    assert.deepEqual(output, ["ok"]);
+  });
+
   it("does not duplicate text when End also carries output", async () => {
     const output: string[] = [];
     await consumeZoSse(
