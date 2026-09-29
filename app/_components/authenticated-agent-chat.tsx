@@ -11,7 +11,7 @@ export async function AuthenticatedAgentChat({
   readonly sessionless?: boolean;
 }) {
   if (process.env.NODE_ENV === "development") {
-    return <AgentChat sessionId={sessionId} sessionless={sessionless} />;
+    return <AgentChat sessionId={sessionId} sessionless={sessionless} userId="development" />;
   }
 
   const session = await auth.api.getSession({ headers: await headers() });
@@ -19,7 +19,7 @@ export async function AuthenticatedAgentChat({
 
   return (
     <>
-      <AgentChat sessionId={sessionId} sessionless={sessionless} />
+      <AgentChat sessionId={sessionId} sessionless={sessionless} userId={session.user.id} />
       <AccountControl
         email={session.user.email}
         image={session.user.image}
