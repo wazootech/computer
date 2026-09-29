@@ -2,8 +2,10 @@ import { cookies } from "next/headers";
 import { auth } from "@/lib/auth";
 import { isSameOriginRequest } from "@/lib/computer-chat-origin";
 import { signComputerChatSession, verifyComputerChatSession } from "@/lib/computer-chat-session";
+import { withSseKeepalive } from "@/lib/sse-keepalive";
 
 export const runtime = "nodejs";
+export const maxDuration = 300;
 
 const ZO_CHAT_PROXY_URL = "https://etok.zo.space/api/computer-chat";
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
@@ -99,7 +101,7 @@ export async function POST(
 
   const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
   const cookie = `${cookieName}=${ticket}; HttpOnly; SameSite=Lax; Path=/api/chat/${sessionId}; Max-Age=${COOKIE_MAX_AGE_SECONDS}${secure}`;
-  return new Response(upstream.body, {
+  return new Response(withSseKeepalive(upstream.body), {
     status: 200,
     headers: {
       "Cache-Control": "no-cache, no-transform",

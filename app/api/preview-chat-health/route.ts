@@ -1,6 +1,7 @@
 import { consumeZoSse } from "@/lib/zo-sse";
 
 export const runtime = "nodejs";
+export const maxDuration = 300;
 
 let healthCheckUsed = false;
 
@@ -27,7 +28,7 @@ export async function POST(): Promise<Response> {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ input: "Reply with exactly OK." }),
-      signal: AbortSignal.timeout(120_000),
+      signal: AbortSignal.timeout(300_000),
       cache: "no-store",
     });
 
