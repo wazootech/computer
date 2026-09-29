@@ -60,6 +60,34 @@ describe("Zo SSE parsing", () => {
     assert.deepEqual(output, ["ok"]);
   });
 
+  it("parses the runtime stream protocol and completes on a succeeded event", async () => {
+    const output: string[] = [];
+    await consumeZoSse(
+      streamFromChunks([
+        'event: AgentRuntimeStreamChunk\ndata: {"type":"status","status":"dispatching"}\n\n',
+        'event: FrontendModelRequest\ndata: {"kind":"request"}\n\n',
+        'event: PartStartEvent\ndata: {"event_kind":"part_start","part":{"part_kind":"text","content":"OK"}}\n\n',
+        'event: completed\ndata: {"status":"succeeded"}\n\n',
+      ]),
+      (text) => output.push(text),
+    );
+    assert.deepEqual(output, ["OK"]);
+  });
+
+  it("emits streamed text deltas and ignores keepalive comments", async () => {
+    const output: string[] = [];
+    await consumeZoSse(
+      streamFromChunks([
+        ": keepalive\n\n",
+        'event: PartStartEvent\ndata: {"part":{"part_kind":"text","content":"Hello "}}\n\n',
+        'event: PartDeltaEvent\ndata: {"delta":{"content_delta":"world"}}\n\n',
+        'event: completed\ndata: {"status":"succeeded"}\n\n',
+      ]),
+      (text) => output.push(text),
+    );
+    assert.deepEqual(output, ["Hello ", "world"]);
+  });
+
   it("does not duplicate text when End also carries output", async () => {
     const output: string[] = [];
     await consumeZoSse(
@@ -72,9 +100,13 @@ describe("Zo SSE parsing", () => {
     assert.deepEqual(output, ["chunk"]);
   });
 
-  it("fails closed on Zo Error events and incomplete streams", async () => {
+  it("fails closed on errors, failed completion, and incomplete streams", async () => {
     await assert.rejects(
       consumeZoSse(streamFromChunks(['event: Error\ndata: {"message":"secret detail"}\n\n']), () => {}),
+      /could not complete/,
+    );
+    await assert.rejects(
+      consumeZoSse(streamFromChunks(['event: completed\ndata: {"status":"failed"}\n\n']), () => {}),
       /could not complete/,
     );
     await assert.rejects(

@@ -52,7 +52,7 @@ function dispatchZoEvent(block: string, state: ZoEventState, onText: (text: stri
     if (line.startsWith("event:")) event = line.slice(6).trim();
     else if (line.startsWith("data:")) data.push(line.slice(5).replace(/^ /, ""));
   }
-  if (event === "End" && data.length === 0) {
+  if ((event === "End" || event === "completed") && data.length === 0) {
     state.completed = true;
     return;
   }
@@ -71,16 +71,55 @@ function dispatchZoEvent(block: string, state: ZoEventState, onText: (text: stri
     if (typeof value.content !== "string") {
       throw new Error("Computer received an invalid text chunk.");
     }
-    state.receivedText = true;
-    onText(value.content);
+    emitText(value.content, state, onText);
     return;
   }
-  if (event === "Error") throw new Error("Computer could not complete the response.");
+  if (event === "PartStartEvent") {
+    const part = isRecord(value.part) ? value.part : undefined;
+    if (part?.part_kind === "text" && typeof part.content === "string") {
+      emitText(part.content, state, onText);
+    }
+    return;
+  }
+  if (event === "PartDeltaEvent") {
+    const delta = isRecord(value.delta) ? value.delta : undefined;
+    const text = typeof value.delta === "string"
+      ? value.delta
+      : typeof delta?.content_delta === "string"
+        ? delta.content_delta
+        : typeof delta?.content === "string"
+          ? delta.content
+          : undefined;
+    if (text !== undefined) emitText(text, state, onText);
+    return;
+  }
+  if (event === "Error" || event === "error") {
+    throw new Error("Computer could not complete the response.");
+  }
   if (event === "End") {
     if (!state.receivedText && typeof value.output === "string") {
-      state.receivedText = true;
-      onText(value.output);
+      emitText(value.output, state, onText);
+    }
+    state.completed = true;
+    return;
+  }
+  if (event === "completed") {
+    if (value.status !== "succeeded") {
+      throw new Error("Computer could not complete the response.");
+    }
+    if (!state.receivedText && typeof value.output === "string") {
+      emitText(value.output, state, onText);
     }
     state.completed = true;
   }
+}
+
+function emitText(text: string, state: ZoEventState, onText: (text: string) => void): void {
+  if (text.length === 0) return;
+  state.receivedText = true;
+  onText(text);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
