@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { consumeZoSse } from "@/lib/zo-sse";
 
 export default function PreviewHealthCheck() {
   const [running, setRunning] = useState(false);
@@ -9,15 +10,38 @@ export default function PreviewHealthCheck() {
   async function runCheck() {
     if (running || result) return;
     setRunning(true);
+    const startedAt = Date.now();
+    const output: string[] = [];
+
     try {
       const response = await fetch("/api/preview-chat-health", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: "{}",
       });
-      setResult(`${response.status} ${await response.text()}`);
-    } catch {
-      setResult("Health check request failed.");
+
+      if (!response.ok || !response.body) {
+        const detail = await response.json().catch(() => ({}));
+        setResult(JSON.stringify({ status: response.status, ...detail }, null, 2));
+        return;
+      }
+
+      await consumeZoSse(response.body, (text) => output.push(text));
+      const reply = output.join("").trim();
+      setResult(JSON.stringify({
+        status: response.status,
+        completed: true,
+        replyWasExpected: /^ok[.!]?$/iu.test(reply),
+        outputCharacters: reply.length,
+        elapsedMs: Date.now() - startedAt,
+      }, null, 2));
+    } catch (error) {
+      setResult(JSON.stringify({
+        completed: false,
+        error: error instanceof Error ? error.message : "Stream failed.",
+        outputCharacters: output.join("").length,
+        elapsedMs: Date.now() - startedAt,
+      }, null, 2));
     } finally {
       setRunning(false);
     }
@@ -26,7 +50,7 @@ export default function PreviewHealthCheck() {
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 p-6 text-foreground">
       <h1 className="text-2xl font-semibold">Preview chat health check</h1>
-      <p className="text-muted-foreground">Runs one Zo-backed stream check and displays only non-sensitive completion metadata.</p>
+      <p className="text-muted-foreground">Runs one protected-preview Zo stream through the browser parser and reports metadata only.</p>
       <button
         type="button"
         onClick={runCheck}
