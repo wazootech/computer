@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 let healthCheckUsed = false;
 
-export async function GET(): Promise<Response> {
+export async function POST(): Promise<Response> {
   const headers = { "Cache-Control": "no-store" };
   if (process.env.VERCEL_ENV !== "preview") return new Response(null, { status: 404, headers });
   if (healthCheckUsed) return Response.json({ error: "Health check already consumed." }, { status: 410, headers });
