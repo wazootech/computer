@@ -72,7 +72,7 @@ export async function POST(
         input,
         ...(existingSession === null ? {} : { conversation_id: existingSession.conversationId }),
       }),
-      signal: request.signal,
+      signal: AbortSignal.timeout(270_000),
     });
   } catch {
     return Response.json({ error: "The Computer chat service is unavailable." }, { status: 502 });
