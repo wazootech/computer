@@ -18,7 +18,7 @@ Computer follows the official Eve software-factory shape:
 work item → classifier → researcher (when needed) → analyst → implementer → reviewer → draft PR
 ```
 
-Each station has its own instructions, sandbox, tools, and structured output. The reviewer is independent, revision loops are capped, and Computer never merges or marks a pull request ready without a person. GitHub intake supports authorized mentions, deliberate candidate triage, human promotion, and CI-failure follow-up. Linear remains an optional channel.
+Each station has its own instructions, sandbox, tools, and structured output. The reviewer is independent, revision loops are capped, and Computer never merges or marks a pull request ready without a person. GitHub intake supports authorized mentions, deliberate candidate triage, human promotion, and CI-failure follow-up. The unattended pull-request summary comment is off by default: it ran on every branch anyone pushed, so an opened PR gets it only when `COMPUTER_PR_SUMMARY_AUTOREPLY` is `on`. Linear remains an optional channel.
 
 ## Risk-scaled review
 

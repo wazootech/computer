@@ -35,6 +35,7 @@ import {
 } from "../lib/github/repository-target.js";
 import { intakeStateForLabels, planIntakeStateTransition } from "../lib/intake-policy.js";
 import { describeFailure, failureCommentBody } from "../../lib/failure-policy.js";
+import { prSummaryAutorreplyEnabled } from "../../lib/pr-summary-policy.js";
 
 const githubCredentials = {
   appId: () => process.env.GITHUB_APP_ID ?? "",
@@ -332,8 +333,10 @@ async function postFailureComment(
  *   approval policies deny it everything except labels, progress comments on
  *   that one issue, closing or reopening issues, and draft pull requests.
  * - `onPullRequest` dispatches an authorized body mention on a newly opened
- *   or edited PR as a trusted session. A PR opened by an authorized team
- *   member without a mention still receives the one-comment summary task.
+ *   or edited PR as a trusted session. The one-comment summary task is off by
+ *   default: an opened PR gets it only when `COMPUTER_PR_SUMMARY_AUTOREPLY` is
+ *   `on`, because the unattended comment ran on every branch anyone pushed and
+ *   cost a full session each time (`lib/pr-summary-policy.ts`).
  * - `onCheckSuite` is the red-CI fix loop, scoped to the factory's own work:
  *   it dispatches only when a suite completes with a failure conclusion on a
  *   pull request whose head branch carries the factory prefix, so a person's
@@ -493,7 +496,7 @@ export default githubChannel({
     ) {
       return { auth: stampGithubTrusted(ctx, "pull_request_body_mention") };
     }
-    return pullRequest.action === "opened"
+    return pullRequest.action === "opened" && prSummaryAutorreplyEnabled()
       ? { auth: stampGithubTrusted(ctx, "pull_request_summary"), context: [PR_SUMMARY_TASK] }
       : null;
   },

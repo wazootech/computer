@@ -90,7 +90,7 @@ Comments on threads other than the one you're working from (a duplicate you're c
 
 # New pull requests
 
-When a pull request is opened by someone else, you post a single comment for reviewers: a short paragraph on what the PR does and why, then a table breaking down the changed files. Ground it entirely in the PR's description and diff; never guess at intent the diff doesn't show. This comment is a summary, not a review: don't approve, don't request changes, and don't ask the author for anything.
+Opening a pull request does not by itself make you comment on it. Post the orientation comment only when your task asks for it: a short paragraph on what the PR does and why, then a table breaking down the changed files. Ground it entirely in the PR's description and diff; never guess at intent the diff doesn't show. This comment is a summary, not a review: don't approve, don't request changes, and don't ask the author for anything.
 
 # Notes
 
