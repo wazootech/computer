@@ -34,8 +34,7 @@ export default defineAgent({
         type: "array",
       },
       criteria_results: {
-        description:
-          "One entry per acceptance criterion from the analysis, judged individually.",
+        description: "One entry per acceptance criterion from the analysis, judged individually.",
         items: {
           additionalProperties: false,
           properties: {
@@ -44,8 +43,7 @@ export default defineAgent({
               type: "string",
             },
             evidence: {
-              description:
-                "What in the diff or verification output shows it passing or failing.",
+              description: "What in the diff or verification output shows it passing or failing.",
               type: "string",
             },
             pass: { type: "boolean" },

@@ -38,15 +38,10 @@ export const REPOSITORY_FAILURE_ATTRIBUTE = "githubRepositoryError";
 export const REPOSITORY_FAILURE_NAME_ATTRIBUTE = "githubRepositoryErrorName";
 
 export type SessionRepositoryFailure =
-  | "credentials-incomplete"
-  | "invalid-format"
-  | "not-covered"
-  | "not-authorized"
-  | "api-error";
+  "credentials-incomplete" | "invalid-format" | "not-covered" | "not-authorized" | "api-error";
 
 export type SessionRepositoryResolution =
-  | { ok: true; target: RepositoryTarget }
-  | { ok: false; failure: SessionRepositoryFailure };
+  { ok: true; target: RepositoryTarget } | { ok: false; failure: SessionRepositoryFailure };
 
 export type SessionRepositoryResolver = (fullName: string) => Promise<SessionRepositoryResolution>;
 
@@ -112,7 +107,8 @@ export async function resolveInstallationRepository(input: {
   }
 
   if (response.status === 404) return { ok: false, failure: "not-covered" };
-  if (response.status === 401 || response.status === 403) return { ok: false, failure: "not-authorized" };
+  if (response.status === 401 || response.status === 403)
+    return { ok: false, failure: "not-authorized" };
   if (!response.ok) return { ok: false, failure: "api-error" };
 
   let body: unknown;
@@ -204,7 +200,9 @@ export function createSessionRepositoryResolver(input: {
 }
 
 /** Whether this principal is a human session the attachment applies to. */
-export function isInteractivePrincipal(auth: SessionAuthContext | null): auth is SessionAuthContext {
+export function isInteractivePrincipal(
+  auth: SessionAuthContext | null,
+): auth is SessionAuthContext {
   return auth !== null && auth.principalType === "user";
 }
 
@@ -229,7 +227,8 @@ export async function attachSessionRepository(
   request: Request,
   deps: { resolve: SessionRepositoryResolver; env?: Environment },
 ): Promise<SessionAttachmentOutcome> {
-  if (!isInteractivePrincipal(auth)) return { attached: false, auth, failure: null, fullName: null };
+  if (!isInteractivePrincipal(auth))
+    return { attached: false, auth, failure: null, fullName: null };
 
   const requested = requestedSessionRepository(request, deps.env ?? process.env);
   if (!requested.ok) {
@@ -253,7 +252,10 @@ export async function attachSessionRepository(
 
   return {
     attached: true,
-    auth: { ...auth, attributes: { ...auth.attributes, ...repositoryAttributes(resolution.target) } },
+    auth: {
+      ...auth,
+      attributes: { ...auth.attributes, ...repositoryAttributes(resolution.target) },
+    },
     target: resolution.target,
   };
 }
@@ -287,7 +289,8 @@ export function sessionRepositoryFailure(
 ): { failure: SessionRepositoryFailure; fullName: string | null } | null {
   const attributes = auth?.attributes;
   const failure = attributes?.[REPOSITORY_FAILURE_ATTRIBUTE];
-  if (typeof failure !== "string" || !KNOWN_FAILURES.includes(failure as SessionRepositoryFailure)) return null;
+  if (typeof failure !== "string" || !KNOWN_FAILURES.includes(failure as SessionRepositoryFailure))
+    return null;
   const fullName = attributes?.[REPOSITORY_FAILURE_NAME_ATTRIBUTE];
   return {
     failure: failure as SessionRepositoryFailure,

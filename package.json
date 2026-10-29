@@ -19,7 +19,10 @@
     "build:eve": "eve build",
     "dev:eve": "eve dev",
     "start:eve": "eve start",
-    "acceptance:repeatability": "node --experimental-strip-types scripts/acceptance-repeatability.ts"
+    "acceptance:repeatability": "node --experimental-strip-types scripts/acceptance-repeatability.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint . --max-warnings 0"
   },
   "dependencies": {
     "@ai-sdk/deepseek": "3.0.36",
@@ -56,10 +59,15 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@eslint/js": "9.39.5",
     "@types/node": "24.13.2",
     "@types/react": "19.2.15",
     "@types/react-dom": "19.2.3",
-    "typescript": "6.0.3"
+    "eslint": "9.39.5",
+    "globals": "17.13.0",
+    "prettier": "3.9.10",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.1"
   },
   "engines": {
     "node": "24.x"

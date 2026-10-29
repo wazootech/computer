@@ -24,25 +24,19 @@ test("repository target comes only from stamped session auth", () => {
         githubRepositoryOwner: target.owner,
       },
     } as never),
-    target
+    target,
   );
   assert.equal(repositoryTargetFromAuth({ attributes: {} } as never), null);
 });
 
 test("repository scope includes the stable GitHub repository id", () => {
-  assert.notEqual(
-    repositoryScopeKey(target),
-    repositoryScopeKey({ ...target, id: 43 })
-  );
+  assert.notEqual(repositoryScopeKey(target), repositoryScopeKey({ ...target, id: 43 }));
 });
 
 test("repository-scopes global search queries and overrides model repo qualifiers", () => {
   assert.equal(
     repositoryScopedSearchQuery("bug repo:other/private is:open", target),
-    "repo:wazootech/example bug is:open"
+    "repo:wazootech/example bug is:open",
   );
-  assert.equal(
-    repositoryScopedSearchQuery("repo:other/private", target),
-    "repo:wazootech/example"
-  );
+  assert.equal(repositoryScopedSearchQuery("repo:other/private", target), "repo:wazootech/example");
 });

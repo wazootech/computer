@@ -9,7 +9,9 @@
  */
 
 /** Gateway close codes Discord never lets a client recover from silently. */
-export const DISCORD_GATEWAY_FATAL_CLOSE_CODES: readonly number[] = [4004, 4010, 4011, 4012, 4013, 4014];
+export const DISCORD_GATEWAY_FATAL_CLOSE_CODES: readonly number[] = [
+  4004, 4010, 4011, 4012, 4013, 4014,
+];
 
 /** Gateway intents the channel requests, as a bitfield. */
 export const DISCORD_GATEWAY_INTENTS =

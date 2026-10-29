@@ -26,10 +26,22 @@ describe("gateway intents", () => {
 
 describe("nextReconnectDelayMs", () => {
   it("grows exponentially and stops at the ceiling", () => {
-    assert.equal(nextReconnectDelayMs(0, () => 0.5), 1_000);
-    assert.equal(nextReconnectDelayMs(1, () => 0.5), 2_000);
-    assert.equal(nextReconnectDelayMs(3, () => 0.5), 8_000);
-    assert.equal(nextReconnectDelayMs(20, () => 0.5), 60_000);
+    assert.equal(
+      nextReconnectDelayMs(0, () => 0.5),
+      1_000,
+    );
+    assert.equal(
+      nextReconnectDelayMs(1, () => 0.5),
+      2_000,
+    );
+    assert.equal(
+      nextReconnectDelayMs(3, () => 0.5),
+      8_000,
+    );
+    assert.equal(
+      nextReconnectDelayMs(20, () => 0.5),
+      60_000,
+    );
   });
 
   it("jitters within ten percent and never returns a negative delay", () => {
@@ -37,7 +49,10 @@ describe("nextReconnectDelayMs", () => {
     const high = nextReconnectDelayMs(2, () => 1);
     assert.equal(low, 3_600);
     assert.equal(high, 4_400);
-    assert.equal(nextReconnectDelayMs(-5, () => 0), 900);
+    assert.equal(
+      nextReconnectDelayMs(-5, () => 0),
+      900,
+    );
   });
 });
 

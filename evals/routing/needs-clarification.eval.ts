@@ -6,7 +6,7 @@ export default defineEval({
   tags: ["slow"],
   async test(t) {
     await t.send(
-      "Something is wrong with the emails, you know the one I mean. Fix it properly this time."
+      "Something is wrong with the emails, you know the one I mean. Fix it properly this time.",
     );
     t.calledSubagent("classifier");
     t.calledSubagent("implementer", { count: 0 });
@@ -14,7 +14,7 @@ export default defineEval({
     t.judge.autoevals
       .closedQA(
         "Does the submission ask the user specific clarifying questions about which email problem they mean, rather than proceeding to build something or claiming work was done?",
-        { on: t.reply ?? "(the run parked on a question instead of replying)" }
+        { on: t.reply ?? "(the run parked on a question instead of replying)" },
       )
       .soft(0.5);
   },

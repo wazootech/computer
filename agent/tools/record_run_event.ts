@@ -12,7 +12,8 @@ const usage = z.object({
 });
 
 export default defineTool({
-  description: "Append one redacted software-factory stage, approval, output, or failure event to the canonical run history. Provide a stable idempotencyKey when replaying an external delivery or lifecycle event.",
+  description:
+    "Append one redacted software-factory stage, approval, output, or failure event to the canonical run history. Provide a stable idempotencyKey when replaying an external delivery or lifecycle event.",
   inputSchema: z.object({
     failure: z.unknown().optional(),
     idempotencyKey: z.string().min(1).max(300).optional(),

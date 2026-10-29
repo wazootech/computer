@@ -16,7 +16,9 @@ function required(name: string): string {
 
 async function main(): Promise<void> {
   if (process.argv.includes("--live")) {
-    throw new Error("live mode is intentionally not implemented by the safe repeatability command; use the explicitly guarded Eve eval instead");
+    throw new Error(
+      "live mode is intentionally not implemented by the safe repeatability command; use the explicitly guarded Eve eval instead",
+    );
   }
   const target: AcceptanceTarget = {
     baseSha: required("base-sha"),
@@ -27,11 +29,20 @@ async function main(): Promise<void> {
   };
   const evidence = await runRepeatabilityReplay(target);
   const outputDirectory = option("output") ?? ".eve/acceptance-repeatability";
-  const outputPath = join(outputDirectory, `${new Date().toISOString().replaceAll(/[:.]/gu, "-")}.json`);
+  const outputPath = join(
+    outputDirectory,
+    `${new Date().toISOString().replaceAll(/[:.]/gu, "-")}.json`,
+  );
   try {
     await mkdir(outputDirectory, { recursive: true });
     await writeFile(outputPath, `${JSON.stringify(evidence, null, 2)}\n`);
-    console.log(JSON.stringify({ outputPath, outcome: evidence.outcome, traceDigests: evidence.runs.map((run) => run.traceDigest) }));
+    console.log(
+      JSON.stringify({
+        outputPath,
+        outcome: evidence.outcome,
+        traceDigests: evidence.runs.map((run) => run.traceDigest),
+      }),
+    );
     if (evidence.outcome !== "success") process.exitCode = 1;
   } catch (error) {
     console.error(error instanceof Error ? error.message : "acceptance harness failed");

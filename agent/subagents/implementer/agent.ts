@@ -22,8 +22,7 @@ export default defineAgent({
     additionalProperties: false,
     properties: {
       base: {
-        description:
-          "The branch the work is based on, normally the repository's default branch.",
+        description: "The branch the work is based on, normally the repository's default branch.",
         type: "string",
       },
       branch: {
@@ -47,8 +46,7 @@ export default defineAgent({
         type: "array",
       },
       deviations: {
-        description:
-          "Departures from the plan, each with its reason; empty when the plan held.",
+        description: "Departures from the plan, each with its reason; empty when the plan held.",
         items: { type: "string" },
         type: "array",
       },
@@ -69,8 +67,7 @@ export default defineAgent({
           properties: {
             command: { description: "The command as run.", type: "string" },
             result: {
-              description:
-                "What it produced: pass/fail and the relevant output.",
+              description: "What it produced: pass/fail and the relevant output.",
               type: "string",
             },
           },

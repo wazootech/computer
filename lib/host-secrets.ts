@@ -45,7 +45,8 @@ export function parseHostSecrets(text: string): Map<string, string> {
     const name = withoutExport.slice(0, separator).trim();
     let value = withoutExport.slice(separator + 1).trim();
     const quoted =
-      (value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"));
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"));
     if (quoted && value.length >= 2) value = value.slice(1, -1);
     if (name.length > 0) values.set(name, value);
   }

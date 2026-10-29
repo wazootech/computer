@@ -28,7 +28,12 @@ export default defineTool({
    */
   async execute(_input, ctx) {
     const target = repositoryTargetFromAuth(ctx.session.auth);
-    if (!target) return { brain: "", found: false, error: "No verified GitHub repository is attached to this session." };
+    if (!target)
+      return {
+        brain: "",
+        found: false,
+        error: "No verified GitHub repository is attached to this session.",
+      };
     const key = factoryBrainKey(target);
     try {
       const doc = await readDocument(key);
@@ -39,10 +44,7 @@ export default defineTool({
     } catch (error) {
       return {
         brain: "",
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to load the factory brain",
+        error: error instanceof Error ? error.message : "Failed to load the factory brain",
         found: false,
       };
     }

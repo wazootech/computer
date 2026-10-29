@@ -5,10 +5,7 @@ import { satisfies } from "eve/evals/expect";
 /**
  * Tool calls that read the repository's label vocabulary before a write.
  */
-const VOCABULARY_READS = new Set([
-  "github__getIssueContext",
-  "github__listLabels",
-]);
+const VOCABULARY_READS = new Set(["github__getIssueContext", "github__listLabels"]);
 
 /**
  * Tool calls that can mirror the classification onto the issue. Both are
@@ -39,7 +36,7 @@ export default defineEval({
   tags: ["fast", "needs-connect"],
   async test(t) {
     await t.send(
-      "Run issue #1 on the repository through the classifier and mirror the classification onto the issue, then stop; do not run the analyst or any later station."
+      "Run issue #1 on the repository through the classifier and mirror the classification onto the issue, then stop; do not run the analyst or any later station.",
     );
     t.calledSubagent("classifier");
     t.calledSubagent("analyst", { count: 0 });
@@ -48,19 +45,15 @@ export default defineEval({
     t.check(
       t.pendingInputRequests.map((request) => request.action.toolName),
       satisfies(
-        (names: readonly string[]) =>
-          names.some((name) => LABEL_WRITES.has(name)),
-        "a label write is among the pending approvals"
-      )
+        (names: readonly string[]) => names.some((name) => LABEL_WRITES.has(name)),
+        "a label write is among the pending approvals",
+      ),
     );
-    t.eventsSatisfy(
-      "reads the repo's label vocabulary before writing labels",
-      (events) => {
-        const order = toolCallOrder(events);
-        const writeAt = order.findIndex((name) => LABEL_WRITES.has(name));
-        const readAt = order.findIndex((name) => VOCABULARY_READS.has(name));
-        return writeAt !== -1 && readAt !== -1 && readAt < writeAt;
-      }
-    );
+    t.eventsSatisfy("reads the repo's label vocabulary before writing labels", (events) => {
+      const order = toolCallOrder(events);
+      const writeAt = order.findIndex((name) => LABEL_WRITES.has(name));
+      const readAt = order.findIndex((name) => VOCABULARY_READS.has(name));
+      return writeAt !== -1 && readAt !== -1 && readAt < writeAt;
+    });
   },
 });

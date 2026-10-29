@@ -7,7 +7,7 @@ export default defineEval({
   tags: ["fast", "needs-connect"],
   async test(t) {
     await t.send(
-      "What is this repository about, and what does its README say about getting started?"
+      "What is this repository about, and what does its README say about getting started?",
     );
     t.succeeded();
     t.calledSubagent("implementer", { count: 0 });

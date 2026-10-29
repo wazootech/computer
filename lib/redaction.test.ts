@@ -19,4 +19,3 @@ test("redacts credential-shaped text", () => {
   const value = redact("Authorization: Bearer abc123 GITHUB_WEBHOOK_SECRET=secret");
   assert.equal(value, "Authorization: Bearer [REDACTED] GITHUB_WEBHOOK_SECRET=[REDACTED]");
 });
-

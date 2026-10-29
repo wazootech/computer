@@ -32,24 +32,38 @@ describe("resolveDiscordAccess", () => {
   });
 
   it("denies unlisted channels", () => {
-    assert.equal(resolveDiscordAccess({ ...base, guildId: "guild-public", channelId: "chan-random" }, config), null);
+    assert.equal(
+      resolveDiscordAccess({ ...base, guildId: "guild-public", channelId: "chan-random" }, config),
+      null,
+    );
   });
 
   it("admits the public tier only in allowlisted public channels of the public guild", () => {
-    assert.deepEqual(resolveDiscordAccess({ ...base, guildId: "guild-public", channelId: "chan-support" }, config), {
-      tier: "public",
-      principalId: "discord-public:user-unknown",
-    });
+    assert.deepEqual(
+      resolveDiscordAccess({ ...base, guildId: "guild-public", channelId: "chan-support" }, config),
+      {
+        tier: "public",
+        principalId: "discord-public:user-unknown",
+      },
+    );
   });
 
   it("fails closed when the channel matches but the guild does not", () => {
-    assert.equal(resolveDiscordAccess({ ...base, guildId: "guild-other", channelId: "chan-support" }, config), null);
+    assert.equal(
+      resolveDiscordAccess({ ...base, guildId: "guild-other", channelId: "chan-support" }, config),
+      null,
+    );
   });
 
   it("admits the internal tier for an allowlisted user in an allowlisted internal channel", () => {
     assert.deepEqual(
       resolveDiscordAccess(
-        { guildId: "guild-internal", channelId: "chan-team", userId: "user-alice", memberRoleIds: [] },
+        {
+          guildId: "guild-internal",
+          channelId: "chan-team",
+          userId: "user-alice",
+          memberRoleIds: [],
+        },
         config,
       ),
       { tier: "internal", principalId: "discord-team:user-alice" },
@@ -59,7 +73,12 @@ describe("resolveDiscordAccess", () => {
   it("admits the internal tier for an allowlisted role even for an unknown user", () => {
     assert.deepEqual(
       resolveDiscordAccess(
-        { guildId: "guild-internal", channelId: "chan-eng", userId: "user-stranger", memberRoleIds: ["role-wazoo-team"] },
+        {
+          guildId: "guild-internal",
+          channelId: "chan-eng",
+          userId: "user-stranger",
+          memberRoleIds: ["role-wazoo-team"],
+        },
         config,
       ),
       { tier: "internal", principalId: "discord-team:user-stranger" },
@@ -69,7 +88,12 @@ describe("resolveDiscordAccess", () => {
   it("denies an internal channel when neither user nor roles are allowlisted", () => {
     assert.equal(
       resolveDiscordAccess(
-        { guildId: "guild-internal", channelId: "chan-team", userId: "user-stranger", memberRoleIds: ["role-other"] },
+        {
+          guildId: "guild-internal",
+          channelId: "chan-team",
+          userId: "user-stranger",
+          memberRoleIds: ["role-other"],
+        },
         config,
       ),
       null,
@@ -79,7 +103,12 @@ describe("resolveDiscordAccess", () => {
   it("denies an internal channel when the guild is not the internal guild", () => {
     assert.equal(
       resolveDiscordAccess(
-        { guildId: "guild-public", channelId: "chan-team", userId: "user-alice", memberRoleIds: ["role-wazoo-team"] },
+        {
+          guildId: "guild-public",
+          channelId: "chan-team",
+          userId: "user-alice",
+          memberRoleIds: ["role-wazoo-team"],
+        },
         config,
       ),
       null,
@@ -88,7 +117,12 @@ describe("resolveDiscordAccess", () => {
 
   it("never admits the public tier through an internal allowlist entry", () => {
     const access = resolveDiscordAccess(
-      { guildId: "guild-internal", channelId: "chan-team", userId: "user-stranger", memberRoleIds: [] },
+      {
+        guildId: "guild-internal",
+        channelId: "chan-team",
+        userId: "user-stranger",
+        memberRoleIds: [],
+      },
       config,
     );
     assert.equal(access, null);
@@ -99,10 +133,16 @@ describe("resolveDiscordAccess", () => {
     // overlap), but the tie-break stays contractual for hand-built configs:
     // the public tier is the fail-safe, read-only direction.
     const overlapping = { ...config, publicChannelIds: ["chan-support", "chan-team"] };
-    assert.deepEqual(resolveDiscordAccess({ ...base, guildId: "guild-public", channelId: "chan-team" }, overlapping), {
-      tier: "public",
-      principalId: "discord-public:user-unknown",
-    });
+    assert.deepEqual(
+      resolveDiscordAccess(
+        { ...base, guildId: "guild-public", channelId: "chan-team" },
+        overlapping,
+      ),
+      {
+        tier: "public",
+        principalId: "discord-public:user-unknown",
+      },
+    );
   });
 });
 
@@ -129,12 +169,22 @@ describe("discordPolicyConfigFromEnv", () => {
   });
 
   it("turns guild-wide admission on only for an explicit truthy flag", () => {
-    const base = { NODE_ENV: "development" as const, DISCORD_INTERNAL_GUILD_IDS: "g1", DISCORD_INTERNAL_ROLE_IDS: "r1" };
+    const base = {
+      NODE_ENV: "development" as const,
+      DISCORD_INTERNAL_GUILD_IDS: "g1",
+      DISCORD_INTERNAL_ROLE_IDS: "r1",
+    };
     for (const on of ["1", "true", "TRUE", " true "]) {
-      assert.equal(discordPolicyConfigFromEnv({ ...base, DISCORD_INTERNAL_GUILD_WIDE: on }).internalGuildWide, true);
+      assert.equal(
+        discordPolicyConfigFromEnv({ ...base, DISCORD_INTERNAL_GUILD_WIDE: on }).internalGuildWide,
+        true,
+      );
     }
     for (const off of [undefined, "", "0", "false", "no", "on", "yes", "banana"]) {
-      assert.equal(discordPolicyConfigFromEnv({ ...base, DISCORD_INTERNAL_GUILD_WIDE: off }).internalGuildWide, false);
+      assert.equal(
+        discordPolicyConfigFromEnv({ ...base, DISCORD_INTERNAL_GUILD_WIDE: off }).internalGuildWide,
+        false,
+      );
     }
   });
 });

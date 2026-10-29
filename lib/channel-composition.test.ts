@@ -2,10 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const channelSource = readFileSync(
-  new URL("../agent/channels/eve.ts", import.meta.url),
-  "utf8",
-);
+const channelSource = readFileSync(new URL("../agent/channels/eve.ts", import.meta.url), "utf8");
 
 const authArray = (() => {
   const match = /auth:\s*\[([\s\S]*?)\],/.exec(channelSource);

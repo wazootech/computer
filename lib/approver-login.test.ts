@@ -100,12 +100,20 @@ test("reads the roster once per TTL and paginates it", async () => {
   const fetchImpl = async (input: URL | RequestInfo) => {
     urls.push(String(input));
     if (urls.length === 1) {
-      return rosterResponse([{ login: "someone", id: 1 }], "https://api.github.com/orgs/wazootech/teams/team/members?page=2");
+      return rosterResponse(
+        [{ login: "someone", id: 1 }],
+        "https://api.github.com/orgs/wazootech/teams/team/members?page=2",
+      );
     }
     return rosterResponse([{ login: ETHAN_LOGIN, id: Number(ETHAN_GITHUB_ID) }]);
   };
 
-  const first = await approverTeamRoster({ env: {}, fetchImpl, mintToken: async () => "token", now: () => now });
+  const first = await approverTeamRoster({
+    env: {},
+    fetchImpl,
+    mintToken: async () => "token",
+    now: () => now,
+  });
   assert.equal(first.logins.size, 2);
   assert.equal(first.loginsById.get(ETHAN_GITHUB_ID), ETHAN_LOGIN);
   assert.equal(urls.length, 2);
@@ -120,7 +128,12 @@ test("reads the roster once per TTL and paginates it", async () => {
 });
 
 test("stamps and reads the verified login on session auth", () => {
-  const auth = { attributes: { name: "Ethan" }, authenticator: "better-auth:vercel", principalId: "u1", principalType: "user" };
+  const auth = {
+    attributes: { name: "Ethan" },
+    authenticator: "better-auth:vercel",
+    principalId: "u1",
+    principalType: "user",
+  };
   const stamped = stampGithubLogin(auth as never, ETHAN_LOGIN);
 
   assert.equal(sessionGithubLogin(stamped), ETHAN_LOGIN);
@@ -143,13 +156,21 @@ test("approval decisions name the missing piece", () => {
 });
 
 test("a chat approval with no verified login is rejected with the reason that says so", () => {
-  const responder = { attributes: {}, authenticator: "better-auth:vercel", principalId: "u1", principalType: "user" };
+  const responder = {
+    attributes: {},
+    authenticator: "better-auth:vercel",
+    principalId: "u1",
+    principalType: "user",
+  };
   const login = sessionGithubLogin(responder as never);
 
   assert.equal(login, null);
-  assert.deepEqual(evaluateApproverAccess({ login, roster: { logins: new Set(), loginsById: new Map() } }), {
-    status: "rejected",
-    reason: MISSING_APPROVER_LOGIN_REASON,
-  });
+  assert.deepEqual(
+    evaluateApproverAccess({ login, roster: { logins: new Set(), loginsById: new Map() } }),
+    {
+      status: "rejected",
+      reason: MISSING_APPROVER_LOGIN_REASON,
+    },
+  );
   assert.match(APPROVER_ROSTER_UNAVAILABLE_REASON, /approver team could not be verified/);
 });

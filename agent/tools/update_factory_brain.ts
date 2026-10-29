@@ -1,10 +1,7 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { writeDocument } from "#lib/blob.js";
-import {
-  factoryBrainKey,
-  MAX_FACTORY_BRAIN_LENGTH,
-} from "#lib/factory-brain.js";
+import { factoryBrainKey, MAX_FACTORY_BRAIN_LENGTH } from "#lib/factory-brain.js";
 import { factoryBrainPolicy } from "#lib/github/approval.js";
 import { repositoryTargetFromAuth } from "#lib/github/repository-target.js";
 
@@ -37,17 +34,18 @@ export default defineTool({
    */
   async execute({ brain }, ctx) {
     const target = repositoryTargetFromAuth(ctx.session.auth);
-    if (!target) return { error: "No verified GitHub repository is attached to this session.", success: false };
+    if (!target)
+      return {
+        error: "No verified GitHub repository is attached to this session.",
+        success: false,
+      };
     const key = factoryBrainKey(target);
     try {
       const blob = await writeDocument(key, brain, { allowOverwrite: true });
       return { pathname: blob.pathname, success: true };
     } catch (error) {
       return {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to update the factory brain",
+        error: error instanceof Error ? error.message : "Failed to update the factory brain",
         success: false,
       };
     }
@@ -57,9 +55,7 @@ export default defineTool({
       .string()
       .min(1)
       .max(MAX_FACTORY_BRAIN_LENGTH)
-      .describe(
-        "The full brain document as Markdown: the merged result, not just the new note."
-      ),
+      .describe("The full brain document as Markdown: the merged result, not just the new note."),
   }),
   outputSchema: z.object({
     error: z.string().optional(),

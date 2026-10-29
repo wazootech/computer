@@ -99,9 +99,7 @@ const LEADING_SLASHES = /^\/+/;
  * @param pathname - A Blob object pathname, e.g. `drafts/post.md`.
  * @returns The matching namespace, or `null` when the path is not reserved.
  */
-export const reservedNamespaceForPath = (
-  pathname: string
-): ReservedNamespace | null => {
+export const reservedNamespaceForPath = (pathname: string): ReservedNamespace | null => {
   const normalized = pathname.replace(LEADING_SLASHES, "");
   for (const [prefix, namespace] of Object.entries(RESERVED_NAMESPACES)) {
     if (normalized.startsWith(prefix)) {
@@ -121,9 +119,7 @@ export const reservedNamespaceForPath = (
  * @param url - A full Blob URL.
  * @returns The matching namespace, or `null` when the URL is not reserved.
  */
-export const reservedNamespaceForUrl = (
-  url: string
-): ReservedNamespace | null => {
+export const reservedNamespaceForUrl = (url: string): ReservedNamespace | null => {
   try {
     return reservedNamespaceForPath(new URL(url).pathname);
   } catch {
@@ -162,10 +158,8 @@ export const reservedReadMessage = (namespace: ReservedNamespace): string =>
  * @returns The document `content` and `uploadedAt` (ISO string) when found.
  */
 export const readDocument = async (
-  key: string
-): Promise<
-  { found: false } | { content: string; found: true; uploadedAt: string }
-> => {
+  key: string,
+): Promise<{ found: false } | { content: string; found: true; uploadedAt: string }> => {
   const result = await get(key, { access: "private" });
   if (!result?.stream) {
     return { found: false };
@@ -195,7 +189,7 @@ export const readDocument = async (
 export const writeDocument = (
   key: string,
   contents: string,
-  options: { allowOverwrite: boolean }
+  options: { allowOverwrite: boolean },
 ) =>
   put(key, contents, {
     access: "private",
@@ -214,9 +208,7 @@ export const writeDocument = (
  * @param key - The exact Blob pathname, derived by the owning feature module.
  * @returns Whether a document existed at the key (and was deleted).
  */
-export const deleteDocument = async (
-  key: string
-): Promise<{ existed: boolean }> => {
+export const deleteDocument = async (key: string): Promise<{ existed: boolean }> => {
   try {
     await head(key);
   } catch (error) {

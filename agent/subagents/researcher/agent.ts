@@ -41,8 +41,7 @@ export default defineAgent({
           additionalProperties: false,
           properties: {
             claim: {
-              description:
-                "A single, specific factual claim the caller can rely on.",
+              description: "A single, specific factual claim the caller can rely on.",
               type: "string",
             },
             confidence: {
@@ -52,8 +51,7 @@ export default defineAgent({
               type: "string",
             },
             notes: {
-              description:
-                "Caveats: date-sensitivity, scope limits, or where sources disagree.",
+              description: "Caveats: date-sensitivity, scope limits, or where sources disagree.",
               type: "string",
             },
             sources: {

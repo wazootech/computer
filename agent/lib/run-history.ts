@@ -16,7 +16,8 @@ export function assertValidRunId(runId: string): string {
   return runId;
 }
 
-export type RunHistoryStatus = "running" | "waiting" | "completed" | "failed" | "cancelled" | "expired" | "manual";
+export type RunHistoryStatus =
+  "running" | "waiting" | "completed" | "failed" | "cancelled" | "expired" | "manual";
 
 export type RunHistoryEventKind =
   | "run.started"
@@ -103,9 +104,21 @@ export type RunHistoryRecord = Readonly<{
 }>;
 
 export interface RunHistoryStore {
-  append(input: AppendRunHistoryInput, target: RepositoryTarget): Promise<{ duplicate: boolean; eventId: string; path: string; runId: string }>;
-  read(target: RepositoryTarget, runId: string): Promise<{ found: true; path: string; record: RunHistoryRecord } | { found: false; path: string; reason?: "missing" | "expired" }>;
-  list(target: RepositoryTarget, options?: RunHistoryListOptions): Promise<readonly RunHistorySummary[]>;
+  append(
+    input: AppendRunHistoryInput,
+    target: RepositoryTarget,
+  ): Promise<{ duplicate: boolean; eventId: string; path: string; runId: string }>;
+  read(
+    target: RepositoryTarget,
+    runId: string,
+  ): Promise<
+    | { found: true; path: string; record: RunHistoryRecord }
+    | { found: false; path: string; reason?: "missing" | "expired" }
+  >;
+  list(
+    target: RepositoryTarget,
+    options?: RunHistoryListOptions,
+  ): Promise<readonly RunHistorySummary[]>;
   remove(target: RepositoryTarget, runId: string): Promise<{ deleted: boolean; count: number }>;
 }
 
@@ -136,8 +149,6 @@ export type AppendRunHistoryInput = Readonly<{
 
 const segment = (value: string): string => encodeURIComponent(value);
 
-const parseSegment = (value: string): string => decodeURIComponent(value);
-
 const runPrefix = (target: RepositoryTarget, runId: string): string =>
   `${RUN_HISTORY_PREFIX}${repositoryScopeKey(target)}/runs/${segment(assertValidRunId(runId))}/`;
 
@@ -164,7 +175,8 @@ function byteLength(value: string): number {
 
 function boundedEventData(base: Omit<RunHistoryEvent, "data">, value: unknown): unknown {
   const redacted = redact(value);
-  const fits = (data: unknown): boolean => byteLength(JSON.stringify({ ...base, data })) <= MAX_EVENT_BYTES;
+  const fits = (data: unknown): boolean =>
+    byteLength(JSON.stringify({ ...base, data })) <= MAX_EVENT_BYTES;
   if (fits(redacted)) return redacted;
   const serialized = JSON.stringify(redacted) ?? "undefined";
   const codePoints = Array.from(serialized);
@@ -189,7 +201,10 @@ function boundedEventData(base: Omit<RunHistoryEvent, "data">, value: unknown): 
 const retentionExpiry = (occurredAt: string): string =>
   new Date(Date.parse(occurredAt) + RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-const statusForKind = (kind: RunHistoryEventKind, current: RunHistoryStatus = "running"): RunHistoryStatus => {
+const statusForKind = (
+  kind: RunHistoryEventKind,
+  current: RunHistoryStatus = "running",
+): RunHistoryStatus => {
   switch (kind) {
     case "run.started":
     case "turn.started":
@@ -228,7 +243,8 @@ async function listAll(prefix: string) {
     blobs.push(...result.blobs.map(({ pathname }) => ({ pathname })));
     cursor = result.hasMore ? result.cursor : undefined;
   } while (cursor);
-  if (blobs.length > MAX_LISTED_EVENTS) throw new Error("Run history exceeds the configured event limit");
+  if (blobs.length > MAX_LISTED_EVENTS)
+    throw new Error("Run history exceeds the configured event limit");
   return blobs;
 }
 
@@ -237,29 +253,43 @@ function immutableComparable(value: unknown): unknown {
   if (!value || typeof value !== "object") return value;
   return Object.fromEntries(
     Object.entries(value)
-      .filter(([key]) => !["claimedAt", "ingestedAt", "occurredAt", "retentionExpiresAt"].includes(key))
+      .filter(
+        ([key]) => !["claimedAt", "ingestedAt", "occurredAt", "retentionExpiresAt"].includes(key),
+      )
       .map(([key, child]) => [key, immutableComparable(child)]),
   );
 }
 
 async function putImmutable(path: string, value: unknown): Promise<boolean> {
   const contents = JSON.stringify(value);
-  if (Buffer.byteLength(contents, "utf8") > MAX_EVENT_BYTES) throw new Error("Run history event exceeds the size limit");
+  if (Buffer.byteLength(contents, "utf8") > MAX_EVENT_BYTES)
+    throw new Error("Run history event exceeds the size limit");
   try {
-    await put(path, contents, { access: "private", addRandomSuffix: false, allowOverwrite: false, contentType: "application/json" });
+    await put(path, contents, {
+      access: "private",
+      addRandomSuffix: false,
+      allowOverwrite: false,
+      contentType: "application/json",
+    });
     return false;
   } catch (error) {
     if (!(error instanceof BlobPreconditionFailedError)) throw error;
     const existing = await readJson<unknown>(path);
-    if (existing === null) throw new Error(`Unable to verify existing idempotency record at ${path}`);
-    if (JSON.stringify(immutableComparable(existing)) !== JSON.stringify(immutableComparable(value))) throw new Error(`Conflicting idempotency key at ${path}`);
+    if (existing === null)
+      throw new Error(`Unable to verify existing idempotency record at ${path}`);
+    if (
+      JSON.stringify(immutableComparable(existing)) !== JSON.stringify(immutableComparable(value))
+    )
+      throw new Error(`Conflicting idempotency key at ${path}`);
     return true;
   }
 }
 
 const summarizeSource = (source: RunHistorySource | undefined): RunHistorySource | undefined => {
   if (!source) return undefined;
-  return Object.fromEntries(Object.entries(source).filter(([, value]) => value !== undefined)) as RunHistorySource;
+  return Object.fromEntries(
+    Object.entries(source).filter(([, value]) => value !== undefined),
+  ) as RunHistorySource;
 };
 
 async function persistRunSummary(target: RepositoryTarget, runId: string): Promise<void> {
@@ -276,11 +306,16 @@ async function persistRunSummary(target: RepositoryTarget, runId: string): Promi
   await put(runHistoryIndexPath(target, runId), body, options);
 }
 
-export async function appendRunHistoryEvent(input: AppendRunHistoryInput, target: RepositoryTarget) {
+export async function appendRunHistoryEvent(
+  input: AppendRunHistoryInput,
+  target: RepositoryTarget,
+) {
   const runId = assertValidRunId(input.runId);
   const rootRunId = assertValidRunId(input.rootRunId ?? runId);
-  const parentRunId = input.parentRunId === undefined ? undefined : assertValidRunId(input.parentRunId);
-  const childRunId = input.childRunId === undefined ? undefined : assertValidRunId(input.childRunId);
+  const parentRunId =
+    input.parentRunId === undefined ? undefined : assertValidRunId(input.parentRunId);
+  const childRunId =
+    input.childRunId === undefined ? undefined : assertValidRunId(input.childRunId);
   const eventId = stableEventId(runId, input.idempotencyKey);
   const occurredAt = input.occurredAt ?? nowIso();
   const ingestedAt = nowIso();
@@ -318,7 +353,10 @@ export async function appendRunHistoryEvent(input: AppendRunHistoryInput, target
   try {
     await persistRunSummary(target, runId);
   } catch (error) {
-    console.error("run history summary projection failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "run history summary projection failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
   }
   return { duplicate, eventId, path, runId };
 }
@@ -327,37 +365,68 @@ export async function startRunHistory(
   input: { runId: string; summary: string; title: string; source?: RunHistorySource },
   target: RepositoryTarget,
 ) {
-  return appendRunHistoryEvent({
-    idempotencyKey: `run:${input.runId}`,
-    kind: "run.started",
-    runId: input.runId,
-    source: input.source,
-    status: "running",
-    summary: `${input.title}: ${input.summary}`,
-  }, target);
+  return appendRunHistoryEvent(
+    {
+      idempotencyKey: `run:${input.runId}`,
+      kind: "run.started",
+      runId: input.runId,
+      source: input.source,
+      status: "running",
+      summary: `${input.title}: ${input.summary}`,
+    },
+    target,
+  );
 }
 
-export async function readRunHistory(target: RepositoryTarget, runId: string): Promise<{ found: true; path: string; record: RunHistoryRecord } | { found: false; path: string; reason?: "missing" | "expired" }> {
+export async function readRunHistory(
+  target: RepositoryTarget,
+  runId: string,
+): Promise<
+  | { found: true; path: string; record: RunHistoryRecord }
+  | { found: false; path: string; reason?: "missing" | "expired" }
+> {
   const validatedRunId = assertValidRunId(runId);
   const prefix = runPrefix(target, validatedRunId);
   const tombstone = await readJson<{ reason?: string }>(`${prefix}tombstone.json`);
-  if (tombstone) return { found: false, path: runHistoryRecordPath(target, validatedRunId), reason: "expired" };
+  if (tombstone)
+    return { found: false, path: runHistoryRecordPath(target, validatedRunId), reason: "expired" };
   const blobs = await listAll(`${prefix}events/`);
-  if (blobs.length === 0) return { found: false, path: runHistoryRecordPath(target, validatedRunId), reason: "missing" };
-  const events = (await Promise.all(blobs.map(({ pathname }) => readJson<RunHistoryEvent>(pathname))))
+  if (blobs.length === 0)
+    return { found: false, path: runHistoryRecordPath(target, validatedRunId), reason: "missing" };
+  const events = (
+    await Promise.all(blobs.map(({ pathname }) => readJson<RunHistoryEvent>(pathname)))
+  )
     .filter((event): event is RunHistoryEvent => event !== null)
-    .sort((a, b) => a.sequence.localeCompare(b.sequence) || a.occurredAt.localeCompare(b.occurredAt) || a.eventId.localeCompare(b.eventId));
-  if (events.length === 0) return { found: false, path: runHistoryRecordPath(target, validatedRunId), reason: "missing" };
+    .sort(
+      (a, b) =>
+        a.sequence.localeCompare(b.sequence) ||
+        a.occurredAt.localeCompare(b.occurredAt) ||
+        a.eventId.localeCompare(b.eventId),
+    );
+  if (events.length === 0)
+    return { found: false, path: runHistoryRecordPath(target, validatedRunId), reason: "missing" };
   const first = events[0];
   const last = events[events.length - 1];
-  if (!first || !last) return { found: false, path: runHistoryRecordPath(target, validatedRunId), reason: "missing" };
+  if (!first || !last)
+    return { found: false, path: runHistoryRecordPath(target, validatedRunId), reason: "missing" };
   const terminalEvent = events.find((event, index) => {
-    const prior = index === 0 ? "running" as RunHistoryStatus : statusForKind(events[index - 1]?.kind ?? "run.started", events[index - 1]?.status ?? "running");
-    return ["completed", "failed", "cancelled", "manual"].includes(statusForKind(event.kind, event.status ?? prior));
+    const prior =
+      index === 0
+        ? ("running" as RunHistoryStatus)
+        : statusForKind(
+            events[index - 1]?.kind ?? "run.started",
+            events[index - 1]?.status ?? "running",
+          );
+    return ["completed", "failed", "cancelled", "manual"].includes(
+      statusForKind(event.kind, event.status ?? prior),
+    );
   });
   const endedAt = terminalEvent?.occurredAt;
   const retentionExpiresAt = endedAt ? retentionExpiry(endedAt) : undefined;
-  const status = events.reduce((current, event) => statusForKind(event.kind, event.status ?? current), "running" as RunHistoryStatus);
+  const status = events.reduce(
+    (current, event) => statusForKind(event.kind, event.status ?? current),
+    "running" as RunHistoryStatus,
+  );
   const summary: RunHistorySummary = {
     endedAt: terminalEvent?.occurredAt,
     eventCount: events.length,
@@ -381,22 +450,36 @@ export async function readRunHistory(target: RepositoryTarget, runId: string): P
   if (retentionExpiresAt && Date.parse(retentionExpiresAt) <= Date.now()) {
     return { found: false, path: runHistoryRecordPath(target, validatedRunId), reason: "expired" };
   }
-  return { found: true, path: runHistoryRecordPath(target, validatedRunId), record: { events, summary } };
+  return {
+    found: true,
+    path: runHistoryRecordPath(target, validatedRunId),
+    record: { events, summary },
+  };
 }
 
-export async function listRunHistory(target: RepositoryTarget, options: RunHistoryListOptions = {}) {
+export async function listRunHistory(
+  target: RepositoryTarget,
+  options: RunHistoryListOptions = {},
+) {
   const blobs = await listAll(`${RUN_HISTORY_PREFIX}${repositoryScopeKey(target)}/index/`);
   const records = [];
   for (const { pathname } of blobs) {
     const summary = await readJson<RunHistorySummary>(pathname);
     if (!summary) continue;
-    if (summary.retentionExpiresAt && Date.parse(summary.retentionExpiresAt) <= Date.now() && !options.includeExpired) continue;
+    if (
+      summary.retentionExpiresAt &&
+      Date.parse(summary.retentionExpiresAt) <= Date.now() &&
+      !options.includeExpired
+    )
+      continue;
     if (
       (!options.status || summary.status === options.status) &&
       (!options.issueNumber || summary.source?.issueNumber === options.issueNumber) &&
-      (!options.pullRequestNumber || summary.source?.pullRequestNumber === options.pullRequestNumber) &&
+      (!options.pullRequestNumber ||
+        summary.source?.pullRequestNumber === options.pullRequestNumber) &&
       (!options.deliveryId || summary.source?.deliveryId === options.deliveryId)
-    ) records.push(summary);
+    )
+      records.push(summary);
   }
   records.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   return records.slice(0, Math.max(1, Math.min(options.limit ?? 50, 100)));
@@ -409,7 +492,16 @@ export async function deleteRunHistory(target: RepositoryTarget, runId: string) 
     ...blobs.map(({ pathname }) => del(pathname)),
     del(runHistoryIndexPath(target, validatedRunId)),
   ]);
-  await put(`${runPrefix(target, validatedRunId)}tombstone.json`, JSON.stringify({ deletedAt: nowIso(), reason: "expired", runId: validatedRunId }), { access: "private", addRandomSuffix: false, allowOverwrite: true, contentType: "application/json" });
+  await put(
+    `${runPrefix(target, validatedRunId)}tombstone.json`,
+    JSON.stringify({ deletedAt: nowIso(), reason: "expired", runId: validatedRunId }),
+    {
+      access: "private",
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      contentType: "application/json",
+    },
+  );
   return { deleted: blobs.length > 0, count: blobs.length };
 }
 
@@ -459,7 +551,8 @@ export async function claimIntakeDecision(
   return { duplicate, issueNumber: input.issueNumber, path, state: input.state };
 }
 
-export const runHistoryPrefixFor = (target: RepositoryTarget, runId: string): string => runPrefix(target, runId);
+export const runHistoryPrefixFor = (target: RepositoryTarget, runId: string): string =>
+  runPrefix(target, runId);
 
 export const blobRunHistoryStore: RunHistoryStore = {
   append: appendRunHistoryEvent,

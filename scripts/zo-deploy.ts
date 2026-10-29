@@ -100,10 +100,7 @@ class ZoMcp {
   private sessionId: string | null = null;
   private nextId = 1;
 
-  constructor(
-    url: string,
-    apiKey: string,
-  ) {
+  constructor(url: string, apiKey: string) {
     this.url = url;
     this.apiKey = apiKey;
   }
@@ -137,7 +134,8 @@ class ZoMcp {
       result?: { content?: readonly { text?: string }[]; isError?: boolean };
       error?: { message?: string };
     };
-    if (payload.error) throw new Error(`${name} failed: ${payload.error.message ?? "unknown error"}`);
+    if (payload.error)
+      throw new Error(`${name} failed: ${payload.error.message ?? "unknown error"}`);
     const text = (payload.result?.content ?? []).map((part) => part.text ?? "").join("\n");
     return { text, isError: payload.result?.isError === true };
   }
@@ -153,11 +151,19 @@ class ZoMcp {
     };
     if (this.sessionId !== null) headers["mcp-session-id"] = this.sessionId;
     try {
-      const response = await fetch(this.url, { method: "POST", headers, body: JSON.stringify(body) });
+      const response = await fetch(this.url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      });
       if (!response.ok) {
-        return new Error(`Zo MCP ${String(response.status)}: ${(await response.text()).slice(0, 400)}`);
+        return new Error(
+          `Zo MCP ${String(response.status)}: ${(await response.text()).slice(0, 400)}`,
+        );
       }
-      return options.expectBody === false ? new Response(null, { status: response.status }) : response;
+      return options.expectBody === false
+        ? new Response(null, { status: response.status })
+        : response;
     } catch (error) {
       return error instanceof Error ? error : new Error(String(error));
     }
@@ -192,20 +198,30 @@ function step(message: string): void {
 
 async function fastForward(zo: ZoMcp, options: Options): Promise<string> {
   const branch = await runCommand(zo, `git -C ${options.directory} rev-parse --abbrev-ref HEAD`);
-  if (branch.returncode !== 0) throw new Error(`no git checkout at ${options.directory}: ${branch.stderr.trim()}`);
+  if (branch.returncode !== 0)
+    throw new Error(`no git checkout at ${options.directory}: ${branch.stderr.trim()}`);
   if (branch.stdout.trim() !== options.branch) {
     throw new Error(`live checkout is on ${branch.stdout.trim()}, expected ${options.branch}`);
   }
 
-  const pull = await runCommand(zo, `git -C ${options.directory} pull --ff-only origin ${options.branch} 2>&1`);
+  const pull = await runCommand(
+    zo,
+    `git -C ${options.directory} pull --ff-only origin ${options.branch} 2>&1`,
+  );
   console.log(pull.stdout.trim());
   if (pull.returncode !== 0) {
-    throw new Error(`git pull failed; the running service was left untouched: ${pull.stderr.trim()}`);
+    throw new Error(
+      `git pull failed; the running service was left untouched: ${pull.stderr.trim()}`,
+    );
   }
 
   const head = await runCommand(zo, `git -C ${options.directory} rev-parse HEAD`);
   const sha = head.stdout.trim();
-  if (options.expectSha !== null && !sha.startsWith(options.expectSha) && !options.expectSha.startsWith(sha)) {
+  if (
+    options.expectSha !== null &&
+    !sha.startsWith(options.expectSha) &&
+    !options.expectSha.startsWith(sha)
+  ) {
     console.log(`note: live checkout is at ${sha}, not the deploying commit ${options.expectSha}`);
   }
   return sha;
@@ -221,7 +237,9 @@ async function resolveService(zo: ZoMcp, options: Options): Promise<ZoServiceEnt
     );
   }
   if (service.mode !== "process") {
-    throw new Error(`service '${options.service}' is mode=${service.mode}; the bridge must be a process service`);
+    throw new Error(
+      `service '${options.service}' is mode=${service.mode}; the bridge must be a process service`,
+    );
   }
   if (service.workdir !== options.directory) {
     console.log(`note: service workdir is ${service.workdir}, deploying ${options.directory}`);
@@ -244,14 +262,17 @@ async function awaitReadiness(
     if (status !== null) {
       last = status;
       const ready = READY_MARKERS.some((marker) => status.logs.includes(marker));
-      const restarted = status.uptimeSeconds === null || status.uptimeSeconds < options.timeoutSeconds;
+      const restarted =
+        status.uptimeSeconds === null || status.uptimeSeconds < options.timeoutSeconds;
       if (status.state === "RUNNING" && ready && restarted) return status;
     }
     await delay(POLL_INTERVAL_MS);
   }
   throw new Error(
     `service did not report a ready gateway within ${String(options.timeoutSeconds)}s; last status: ${
-      last === null ? "unavailable" : `${last.state} uptime ${String(last.uptimeSeconds)}s\n${last.logs}`
+      last === null
+        ? "unavailable"
+        : `${last.state} uptime ${String(last.uptimeSeconds)}s\n${last.logs}`
     }`,
   );
 }

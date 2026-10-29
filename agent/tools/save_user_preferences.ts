@@ -49,8 +49,7 @@ export default defineTool({
       return { pathname: blob.pathname, success: true };
     } catch (error) {
       return {
-        error:
-          error instanceof Error ? error.message : "Failed to save preferences",
+        error: error instanceof Error ? error.message : "Failed to save preferences",
         success: false,
       };
     }
@@ -61,7 +60,7 @@ export default defineTool({
       .min(1)
       .max(MAX_PREFERENCES_LENGTH)
       .describe(
-        "The full preferences document as Markdown: the merged result, not just the new note."
+        "The full preferences document as Markdown: the merged result, not just the new note.",
       ),
   }),
   outputSchema: z.object({

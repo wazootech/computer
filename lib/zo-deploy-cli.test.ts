@@ -16,7 +16,11 @@ const SERVICE_LIST = [
   `    workdir='${DEPLOYED_DIRECTORY}' protocol='tcp'`,
 ].join("\n");
 
-function doctorReport(input: { readonly logs: string; readonly state: string; readonly uptime: number }): string {
+function doctorReport(input: {
+  readonly logs: string;
+  readonly state: string;
+  readonly uptime: number;
+}): string {
   return [
     "Host status: OK",
     "",
@@ -30,7 +34,10 @@ function doctorReport(input: { readonly logs: string; readonly state: string; re
 
 interface FakeZo {
   readonly calls: string[];
-  readonly requests: readonly { readonly method: string; readonly sessionHeader: string | undefined }[];
+  readonly requests: readonly {
+    readonly method: string;
+    readonly sessionHeader: string | undefined;
+  }[];
   readonly restarts: string[];
   readonly urls: string;
   readonly close: () => Promise<void>;
@@ -40,7 +47,12 @@ interface FakeZo {
   readonly setPullReturncode: (code: number) => void;
 }
 
-function jsonRpc(response: ServerResponse, id: unknown, result: unknown, options: { readonly sse?: boolean } = {}): void {
+function jsonRpc(
+  response: ServerResponse,
+  id: unknown,
+  result: unknown,
+  options: { readonly sse?: boolean } = {},
+): void {
   const payload = JSON.stringify({ jsonrpc: "2.0", id, result });
   if (options.sse === true) {
     response.writeHead(200, { "content-type": "text/event-stream" });
@@ -95,7 +107,11 @@ async function startFakeZo(): Promise<FakeZo> {
       if (name === "bash") {
         const cmd = String(args.cmd);
         if (cmd.includes("rev-parse --abbrev-ref")) {
-          jsonRpc(response, message.id, { content: [{ type: "text", text: `CmdResult(stdout='main\\n', stderr='', returncode=0)` }] });
+          jsonRpc(response, message.id, {
+            content: [
+              { type: "text", text: `CmdResult(stdout='main\\n', stderr='', returncode=0)` },
+            ],
+          });
           return;
         }
         if (cmd.includes("pull --ff-only")) {
@@ -106,7 +122,11 @@ async function startFakeZo(): Promise<FakeZo> {
           jsonRpc(response, message.id, { content: [{ type: "text", text }] });
           return;
         }
-        jsonRpc(response, message.id, { content: [{ type: "text", text: `CmdResult(stdout='${HEAD_SHA}\\n', stderr='', returncode=0)` }] });
+        jsonRpc(response, message.id, {
+          content: [
+            { type: "text", text: `CmdResult(stdout='${HEAD_SHA}\\n', stderr='', returncode=0)` },
+          ],
+        });
         return;
       }
       if (name === "list_user_services") {
@@ -116,7 +136,9 @@ async function startFakeZo(): Promise<FakeZo> {
       if (name === "update_user_service") {
         state.restarts.push(String(args.service_id));
         state.restarted = true;
-        jsonRpc(response, message.id, { content: [{ type: "text", text: "Updated service svc_bridge123." }] });
+        jsonRpc(response, message.id, {
+          content: [{ type: "text", text: "Updated service svc_bridge123." }],
+        });
         return;
       }
       assert.equal(name, "service_doctor");
@@ -143,7 +165,11 @@ async function startFakeZo(): Promise<FakeZo> {
         });
       }),
     markRestarted: () => {
-      state.doctor = doctorReport({ logs: "channel starting\nready: computer-discord", state: "RUNNING", uptime: 2 });
+      state.doctor = doctorReport({
+        logs: "channel starting\nready: computer-discord",
+        state: "RUNNING",
+        uptime: 2,
+      });
     },
     setDoctor: (report: string) => {
       state.doctor = report;
@@ -241,7 +267,13 @@ describe("zo deploy script", () => {
   });
 
   it("reports a service that never becomes ready", async () => {
-    fake.setDoctor(doctorReport({ logs: "bridge starting\n{\"error\":\"bot identity check failed\"}", state: "FATAL", uptime: 1 }));
+    fake.setDoctor(
+      doctorReport({
+        logs: 'bridge starting\n{"error":"bot identity check failed"}',
+        state: "FATAL",
+        uptime: 1,
+      }),
+    );
     const run = await runDeploy(fake, ["--timeout", "5"]);
     fake.markRestarted();
     assert.equal(run.status, 1);

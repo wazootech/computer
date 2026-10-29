@@ -31,17 +31,29 @@ export interface ZoServiceStatus {
   readonly logs: string;
 }
 
-const COMMAND_RESULT_PATTERN = /^CmdResult\(stdout='([\s\S]*?)', stderr='([\s\S]*?)', returncode=(-?\d+)\)$/u;
+const COMMAND_RESULT_PATTERN =
+  /^CmdResult\(stdout='([\s\S]*?)', stderr='([\s\S]*?)', returncode=(-?\d+)\)$/u;
 const SERVICE_ENTRY_PATTERN = /service_id='([^']*)' label='([^']*)' mode='([^']*)'/u;
 const SERVICE_FIELD_ESCAPED = String.raw`(?:[^'\\]|\\.)*`;
-const REPR_ESCAPES: Record<string, string> = { n: "\n", r: "\r", t: "\t", "\\": "\\", "'": "'", '"': '"' };
+const REPR_ESCAPES: Record<string, string> = {
+  n: "\n",
+  r: "\r",
+  t: "\t",
+  "\\": "\\",
+  "'": "'",
+  '"': '"',
+};
 
 /** Reads a bash result. Returns null when the text is not a command result. */
 export function parseZoCommandResult(text: string): ZoCommandResult | null {
   const match = COMMAND_RESULT_PATTERN.exec(text.trim());
   if (match === null) return null;
   const [, stdout, stderr, returncode] = match;
-  return { stdout: unescapeRepr(stdout), stderr: unescapeRepr(stderr), returncode: Number(returncode) };
+  return {
+    stdout: unescapeRepr(stdout),
+    stderr: unescapeRepr(stderr),
+    returncode: Number(returncode),
+  };
 }
 
 /**
@@ -87,7 +99,10 @@ export function parseZoServiceList(text: string): readonly ZoServiceEntry[] {
 }
 
 /** Finds one service by label. Duplicate labels are a misconfiguration, not a pick. */
-export function findZoService(entries: readonly ZoServiceEntry[], label: string): ZoServiceEntry | null {
+export function findZoService(
+  entries: readonly ZoServiceEntry[],
+  label: string,
+): ZoServiceEntry | null {
   const matches = entries.filter((entry) => entry.label === label);
   return matches.length === 1 ? matches[0] : null;
 }
@@ -96,12 +111,18 @@ export function findZoService(entries: readonly ZoServiceEntry[], label: string)
 export function parseZoServiceStatus(text: string, label: string): ZoServiceStatus | null {
   const line = text.split("\n").find((candidate) => candidate.trim().startsWith(`${label}:`));
   if (line === undefined) return null;
-  const status = line.trim().slice(label.length + 1).trim();
+  const status = line
+    .trim()
+    .slice(label.length + 1)
+    .trim();
   const uptime = /uptime (\d+):(\d+):(\d+)/u.exec(status);
   return {
     label,
     state: status.split(",")[0].trim(),
-    uptimeSeconds: uptime === null ? null : Number(uptime[1]) * 3_600 + Number(uptime[2]) * 60 + Number(uptime[3]),
+    uptimeSeconds:
+      uptime === null
+        ? null
+        : Number(uptime[1]) * 3_600 + Number(uptime[2]) * 60 + Number(uptime[3]),
     logs: readDoctorLogs(text),
   };
 }

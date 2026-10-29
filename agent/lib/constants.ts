@@ -4,7 +4,8 @@ export const FACTORY_BRANCH_PREFIX = process.env.FACTORY_BRANCH_PREFIX ?? "facto
 
 export const FACTORY_CANDIDATE_LABEL = process.env.FACTORY_CANDIDATE_LABEL ?? "factory:candidate";
 export const FACTORY_QUEUED_LABEL = process.env.FACTORY_QUEUED_LABEL ?? "factory:queued";
-export const FACTORY_NEEDS_CLARIFICATION_LABEL = process.env.FACTORY_NEEDS_CLARIFICATION_LABEL ?? "factory:needs-clarification";
+export const FACTORY_NEEDS_CLARIFICATION_LABEL =
+  process.env.FACTORY_NEEDS_CLARIFICATION_LABEL ?? "factory:needs-clarification";
 export const FACTORY_DUPLICATE_LABEL = process.env.FACTORY_DUPLICATE_LABEL ?? "factory:duplicate";
 export const FACTORY_BLOCKED_LABEL = process.env.FACTORY_BLOCKED_LABEL ?? "factory:blocked";
 export const FACTORY_PROMOTED_LABEL = process.env.FACTORY_PROMOTED_LABEL ?? "factory:promoted";
@@ -35,10 +36,17 @@ export const FACTORY_TERMINAL_LABELS = [
   FACTORY_COMPLETED_LABEL,
 ] as const;
 
-export const INTAKE_CLASSIFICATION_LABELS = (process.env.FACTORY_INTAKE_ALLOWED_LABELS ??
-  "bug,documentation,enhancement,good first issue,help wanted,question,wayfinder:task").split(",").map((label) => label.trim()).filter(Boolean);
+export const INTAKE_CLASSIFICATION_LABELS = (
+  process.env.FACTORY_INTAKE_ALLOWED_LABELS ??
+  "bug,documentation,enhancement,good first issue,help wanted,question,wayfinder:task"
+)
+  .split(",")
+  .map((label) => label.trim())
+  .filter(Boolean);
 
-export function validateFactoryLabelConfiguration(environment: Record<string, string | undefined> = process.env): string[] {
+export function validateFactoryLabelConfiguration(
+  environment: Record<string, string | undefined> = process.env,
+): string[] {
   const candidate = environment.FACTORY_CANDIDATE_LABEL?.trim() || FACTORY_CANDIDATE_LABEL;
   const promoted = environment.FACTORY_PROMOTED_LABEL?.trim() || FACTORY_PROMOTED_LABEL;
   const terminal = [
@@ -48,9 +56,16 @@ export function validateFactoryLabelConfiguration(environment: Record<string, st
     environment.FACTORY_MANUAL_LABEL?.trim() || FACTORY_MANUAL_LABEL,
     environment.FACTORY_COMPLETED_LABEL?.trim() || FACTORY_COMPLETED_LABEL,
   ];
-  const labels = [candidate, environment.FACTORY_QUEUED_LABEL?.trim() || FACTORY_QUEUED_LABEL, environment.FACTORY_NEEDS_CLARIFICATION_LABEL?.trim() || FACTORY_NEEDS_CLARIFICATION_LABEL, ...terminal, promoted];
+  const labels = [
+    candidate,
+    environment.FACTORY_QUEUED_LABEL?.trim() || FACTORY_QUEUED_LABEL,
+    environment.FACTORY_NEEDS_CLARIFICATION_LABEL?.trim() || FACTORY_NEEDS_CLARIFICATION_LABEL,
+    ...terminal,
+    promoted,
+  ];
   const errors: string[] = [];
-  if (labels.some((label) => label.length === 0)) errors.push("factory state labels must be non-empty");
+  if (labels.some((label) => label.length === 0))
+    errors.push("factory state labels must be non-empty");
   if (new Set(labels).size !== labels.length) errors.push("factory state labels must be unique");
   if (candidate === promoted) errors.push("candidate and promotion labels must differ");
   if (terminal.includes(candidate)) errors.push("candidate label cannot be terminal");

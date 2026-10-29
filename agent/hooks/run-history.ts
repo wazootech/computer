@@ -3,7 +3,13 @@ import { sourceFromAuth, hasGithubCorrelation } from "#lib/run-history-source.js
 import { appendRunHistoryEvent } from "#lib/run-history.js";
 import { repositoryTargetFromAuth } from "#lib/github/repository-target.js";
 
-const EVENT_MAP: Record<string, { kind: Parameters<typeof appendRunHistoryEvent>[0]["kind"]; status?: Parameters<typeof appendRunHistoryEvent>[0]["status"] }> = {
+const EVENT_MAP: Record<
+  string,
+  {
+    kind: Parameters<typeof appendRunHistoryEvent>[0]["kind"];
+    status?: Parameters<typeof appendRunHistoryEvent>[0]["status"];
+  }
+> = {
   "session.started": { kind: "run.started", status: "running" },
   "session.waiting": { kind: "run.waiting", status: "waiting" },
   "session.completed": { kind: "run.completed", status: "completed" },
@@ -27,7 +33,12 @@ type RuntimeEvent = {
 
 function summaryFor(event: RuntimeEvent): string {
   const data = event.data ?? {};
-  const name = typeof data.name === "string" ? data.name : typeof data.subagentName === "string" ? data.subagentName : undefined;
+  const name =
+    typeof data.name === "string"
+      ? data.name
+      : typeof data.subagentName === "string"
+        ? data.subagentName
+        : undefined;
   const childSessionId = typeof data.childSessionId === "string" ? data.childSessionId : undefined;
   if (name && childSessionId) return `${event.type}: ${name} (${childSessionId})`;
   if (name) return `${event.type}: ${name}`;
@@ -52,7 +63,10 @@ export default defineHook({
   },
 });
 
-async function record(event: RuntimeEvent, ctx: { session: { id: string; auth: unknown }; channel: { kind?: string } }) {
+async function record(
+  event: RuntimeEvent,
+  ctx: { session: { id: string; auth: unknown }; channel: { kind?: string } },
+) {
   const target = repositoryTargetFromAuth(ctx.session.auth as never);
   if (!target) return;
   const mapped = EVENT_MAP[event.type];
@@ -69,25 +83,37 @@ async function record(event: RuntimeEvent, ctx: { session: { id: string; auth: u
   const data = event.data ?? {};
   const childRunId = typeof data.childSessionId === "string" ? data.childSessionId : undefined;
   try {
-    await appendRunHistoryEvent({
-      childRunId,
-      data: {
+    await appendRunHistoryEvent(
+      {
         childRunId,
-        name: typeof data.name === "string" ? data.name : undefined,
-        subagentName: typeof data.subagentName === "string" ? data.subagentName : undefined,
-        toolName: typeof data.toolName === "string" ? data.toolName : undefined,
+        data: {
+          childRunId,
+          name: typeof data.name === "string" ? data.name : undefined,
+          subagentName: typeof data.subagentName === "string" ? data.subagentName : undefined,
+          toolName: typeof data.toolName === "string" ? data.toolName : undefined,
+        },
+        idempotencyKey:
+          event.meta?.id ?? `${ctx.session.id}:${event.type}:${event.meta?.at ?? "unknown"}`,
+        kind: mapped.kind,
+        occurredAt: event.meta?.at,
+        parentRunId: childRunId ? ctx.session.id : undefined,
+        runId: ctx.session.id,
+        source,
+        stage:
+          typeof data.name === "string"
+            ? data.name
+            : typeof data.subagentName === "string"
+              ? data.subagentName
+              : undefined,
+        status: mapped.status,
+        summary: summaryFor(event),
       },
-      idempotencyKey: event.meta?.id ?? `${ctx.session.id}:${event.type}:${event.meta?.at ?? "unknown"}`,
-      kind: mapped.kind,
-      occurredAt: event.meta?.at,
-      parentRunId: childRunId ? ctx.session.id : undefined,
-      runId: ctx.session.id,
-      source,
-      stage: typeof data.name === "string" ? data.name : typeof data.subagentName === "string" ? data.subagentName : undefined,
-      status: mapped.status,
-      summary: summaryFor(event),
-    }, target);
+      target,
+    );
   } catch (error) {
-    console.error("run history event persistence failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "run history event persistence failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
   }
 }

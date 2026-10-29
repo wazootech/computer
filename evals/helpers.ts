@@ -42,20 +42,12 @@ export const ROOT_WRITE_TOOLS = ["update_factory_brain"] as const;
 /**
  * Every write tool the model can reach, extension and root alike.
  */
-export const WRITE_TOOLS = [
-  ...GITHUB_WRITE_TOOLS,
-  ...ROOT_WRITE_TOOLS,
-] as const;
+export const WRITE_TOOLS = [...GITHUB_WRITE_TOOLS, ...ROOT_WRITE_TOOLS] as const;
 
 /**
  * The four factory stations, in pipeline order.
  */
-export const STATIONS = [
-  "classifier",
-  "analyst",
-  "implementer",
-  "reviewer",
-] as const;
+export const STATIONS = ["classifier", "analyst", "implementer", "reviewer"] as const;
 
 /**
  * Returns the order in which subagents were first delegated to during a run,
@@ -65,9 +57,7 @@ export const STATIONS = [
  * Station delegations are subagent calls, not tool calls, so ordering
  * assertions walk the subagent events rather than `t.toolOrder`.
  */
-export function subagentCallOrder(
-  events: readonly MessageStreamEvent[]
-): string[] {
+export function subagentCallOrder(events: readonly MessageStreamEvent[]): string[] {
   const order: string[] = [];
   for (const event of events) {
     if (event.type !== "subagent.called") {
@@ -87,11 +77,9 @@ export function subagentCallOrder(
  */
 export function calledInOrder(
   events: readonly MessageStreamEvent[],
-  names: readonly string[]
+  names: readonly string[],
 ): boolean {
   const order = subagentCallOrder(events);
   const indices = names.map((name) => order.indexOf(name));
-  return indices.every(
-    (index, i) => index !== -1 && (i === 0 || index > (indices[i - 1] ?? -1))
-  );
+  return indices.every((index, i) => index !== -1 && (i === 0 || index > (indices[i - 1] ?? -1)));
 }
