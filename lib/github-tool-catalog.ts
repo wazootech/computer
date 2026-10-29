@@ -20,7 +20,8 @@
  */
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { join, posix } from "node:path";
+import { dirname, join, posix } from "node:path";
+import { fileURLToPath } from "node:url";
 
 export const GITHUB_TOOL_BINDING_PREFIX = "github__";
 
@@ -47,7 +48,7 @@ export type GithubToolSurfaceEntry = {
  */
 export function resolveGithubSdkDeclarationsDir(): string {
   const entry = import.meta.resolve("@github-tools/sdk/eve");
-  const declarationsDir = posix.dirname(entry.replace(/^file:\/\//u, ""));
+  const declarationsDir = dirname(fileURLToPath(entry));
   if (!existsSync(declarationsDir)) {
     throw new Error(
       `no GitHub SDK declarations at ${declarationsDir}; the tool descriptions cannot be resolved`,
