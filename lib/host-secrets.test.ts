@@ -1,10 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  CHANNEL_SECRET_NAMES,
-  loadHostSecrets,
-  parseHostSecrets,
-} from "./host-secrets.ts";
+import { CHANNEL_SECRET_NAMES, loadHostSecrets, parseHostSecrets } from "./host-secrets.ts";
 
 const SECRETS = [
   "# Zo secrets",
@@ -32,7 +28,12 @@ test("strips quotes and an export prefix", () => {
 
 test("fills an unset variable from the host file", () => {
   const env: Record<string, string | undefined> = { COMPUTER_BASE_URL: "https://example.test" };
-  const source = loadHostSecrets(env, ["/secrets"], () => true, () => SECRETS);
+  const source = loadHostSecrets(
+    env,
+    ["/secrets"],
+    () => true,
+    () => SECRETS,
+  );
   assert.equal(env.DISCORD_BOT_TOKEN, "bot-token");
   assert.equal(source.skipped, false);
   assert.equal(source.path, "/secrets");
@@ -46,7 +47,12 @@ test("fills an unset variable from the host file", () => {
 
 test("never overwrites a variable the service already set", () => {
   const env: Record<string, string | undefined> = { DISCORD_BOT_TOKEN: "from-service" };
-  const source = loadHostSecrets(env, ["/secrets"], () => true, () => SECRETS);
+  const source = loadHostSecrets(
+    env,
+    ["/secrets"],
+    () => true,
+    () => SECRETS,
+  );
   assert.equal(env.DISCORD_BOT_TOKEN, "from-service");
   assert.ok(!source.loaded.includes("DISCORD_BOT_TOKEN"));
   assert.ok(source.loaded.includes("ZO_CLIENT_IDENTITY_TOKEN"));
@@ -54,13 +60,23 @@ test("never overwrites a variable the service already set", () => {
 
 test("treats an empty variable as unset", () => {
   const env: Record<string, string | undefined> = { DISCORD_BOT_TOKEN: "" };
-  loadHostSecrets(env, ["/secrets"], () => true, () => SECRETS);
+  loadHostSecrets(
+    env,
+    ["/secrets"],
+    () => true,
+    () => SECRETS,
+  );
   assert.equal(env.DISCORD_BOT_TOKEN, "bot-token");
 });
 
 test("skips quietly when no secrets file exists", () => {
   const env: Record<string, string | undefined> = {};
-  const source = loadHostSecrets(env, ["/secrets"], () => false, () => SECRETS);
+  const source = loadHostSecrets(
+    env,
+    ["/secrets"],
+    () => false,
+    () => SECRETS,
+  );
   assert.equal(source.skipped, true);
   assert.deepEqual(source.loaded, []);
   assert.equal(env.DISCORD_BOT_TOKEN, undefined);
@@ -80,7 +96,12 @@ test("honors ZO_SECRETS_PATH ahead of the default location", () => {
 
 test("leaves unrelated names alone", () => {
   const env: Record<string, string | undefined> = {};
-  loadHostSecrets(env, ["/secrets"], () => true, () => SECRETS);
+  loadHostSecrets(
+    env,
+    ["/secrets"],
+    () => true,
+    () => SECRETS,
+  );
   assert.equal(env.NOT_A_BRIDGE_NAME, undefined);
   assert.ok(CHANNEL_SECRET_NAMES.includes("DISCORD_BOT_TOKEN"));
   assert.ok(CHANNEL_SECRET_NAMES.includes("ZO_CLIENT_IDENTITY_TOKEN"));

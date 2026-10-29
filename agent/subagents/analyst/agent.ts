@@ -25,8 +25,7 @@ export default defineAgent({
     additionalProperties: false,
     properties: {
       acceptance_criteria: {
-        description:
-          "Objective, testable criteria the reviewer will check one by one, verbatim.",
+        description: "Objective, testable criteria the reviewer will check one by one, verbatim.",
         items: { type: "string" },
         minItems: 1,
         type: "array",
@@ -67,8 +66,7 @@ export default defineAgent({
         type: "array",
       },
       problem_statement: {
-        description:
-          "What is actually wrong or wanted, restated as a precise engineering problem.",
+        description: "What is actually wrong or wanted, restated as a precise engineering problem.",
         type: "string",
       },
       risks: {

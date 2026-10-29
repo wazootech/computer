@@ -32,9 +32,7 @@ export type DeepSeekThinking = "enabled" | "disabled";
 
 export const DEFAULT_DEEPSEEK_THINKING: DeepSeekThinking = "disabled";
 
-export function resolveGatewayModel(env: {
-  COMPUTER_MODEL?: string | undefined;
-}): string {
+export function resolveGatewayModel(env: { COMPUTER_MODEL?: string | undefined }): string {
   return env.COMPUTER_MODEL?.trim() || DEFAULT_GATEWAY_MODEL;
 }
 

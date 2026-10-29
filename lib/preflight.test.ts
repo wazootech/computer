@@ -41,10 +41,21 @@ test("proves the installation token carries members read and can read the approv
   const pem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
   const calls: Array<{ url: string; authorization: string }> = [];
   const responses = [
-    new Response(JSON.stringify({ token: "installation-token", permissions: { members: "read", issues: "write" } }), { status: 201 }),
+    new Response(
+      JSON.stringify({
+        token: "installation-token",
+        permissions: { members: "read", issues: "write" },
+      }),
+      { status: 201 },
+    ),
     new Response(JSON.stringify([{ login: "EthanThatOneKid" }]), { status: 200 }),
     new Response(
-      JSON.stringify({ id: 915, name: "workspace", full_name: "wazootech/workspace", owner: { login: "wazootech" } }),
+      JSON.stringify({
+        id: 915,
+        name: "workspace",
+        full_name: "wazootech/workspace",
+        owner: { login: "wazootech" },
+      }),
       { status: 200 },
     ),
   ];
@@ -85,7 +96,13 @@ test("proves the installation token carries members read and can read the approv
 
 test("checks an explicitly named repository and reports a missing one legibly", async () => {
   const responses = [
-    new Response(JSON.stringify({ token: "installation-token", permissions: { members: "read", issues: "write" } }), { status: 201 }),
+    new Response(
+      JSON.stringify({
+        token: "installation-token",
+        permissions: { members: "read", issues: "write" },
+      }),
+      { status: 201 },
+    ),
     new Response(JSON.stringify([{ login: "EthanThatOneKid" }]), { status: 200 }),
     new Response(JSON.stringify({ message: "Not Found" }), { status: 404 }),
   ];
@@ -121,7 +138,10 @@ test("rejects a malformed repository name instead of asking GitHub about it", as
   const pem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
   const urls: string[] = [];
   const responses = [
-    new Response(JSON.stringify({ token: "installation-token", permissions: { members: "read" } }), { status: 201 }),
+    new Response(
+      JSON.stringify({ token: "installation-token", permissions: { members: "read" } }),
+      { status: 201 },
+    ),
     new Response(JSON.stringify([{ login: "EthanThatOneKid" }]), { status: 200 }),
   ];
 
@@ -142,7 +162,10 @@ test("rejects a malformed repository name instead of asking GitHub about it", as
   assert.equal(result.githubApp.repository.fullName, "https://github.com/wazootech/workspace");
   assert.match(result.githubApp.repository.error ?? "", /invalid-format/);
   assert.equal(result.ok, false);
-  assert.equal(urls.some((url) => url.includes("/repos/")), false);
+  assert.equal(
+    urls.some((url) => url.includes("/repos/")),
+    false,
+  );
 });
 
 test("gateway probe sends the default model and thinking pin like the agent wiring", async () => {
@@ -157,13 +180,22 @@ test("gateway probe sends the default model and thinking pin like the agent wiri
     },
     async (_input, init) => {
       if (init?.body != null) bodies.push(String(init.body));
-      return new Response(JSON.stringify({ choices: [{ message: { content: "OK" } }] }), { status: 200 });
+      return new Response(JSON.stringify({ choices: [{ message: { content: "OK" } }] }), {
+        status: 200,
+      });
     },
   );
 
-  const probe = bodies.map((b) => { try { return JSON.parse(b); } catch { return null; } }).find(
-    (b) => b && typeof b === "object" && "model" in b,
-  ) as { model: string; deepseek?: { thinking?: { type: string } } } | undefined;
+  const probe = bodies
+    .map((b) => {
+      try {
+        return JSON.parse(b);
+      } catch {
+        return null;
+      }
+    })
+    .find((b) => b && typeof b === "object" && "model" in b) as
+    { model: string; deepseek?: { thinking?: { type: string } } } | undefined;
   assert.ok(probe, "gateway probe body captured");
   assert.equal(probe.model, "deepseek/deepseek-v4.1-flash");
   assert.deepEqual(probe.deepseek?.thinking, { type: "disabled" });
@@ -185,18 +217,30 @@ test("gateway probe honors COMPUTER_MODEL and DEEPSEEK_THINKING overrides", asyn
     async (_input, init) => {
       if (init?.body != null) bodies.push(String(init.body));
       if (String(init?.body).includes("model")) {
-        return new Response(JSON.stringify({ choices: [{ message: { content: "OK" } }] }), { status: 200 });
+        return new Response(JSON.stringify({ choices: [{ message: { content: "OK" } }] }), {
+          status: 200,
+        });
       }
       return new Response("{}", { status: 500 });
     },
   );
 
-  const probe = bodies.map((b) => { try { return JSON.parse(b); } catch { return null; } }).find(
-    (b) => b && typeof b === "object" && "model" in b,
-  ) as { model: string; thinking?: { type: string } } | undefined;
+  const probe = bodies
+    .map((b) => {
+      try {
+        return JSON.parse(b);
+      } catch {
+        return null;
+      }
+    })
+    .find((b) => b && typeof b === "object" && "model" in b) as
+    { model: string; thinking?: { type: string } } | undefined;
   assert.ok(probe, "gateway probe body captured");
   assert.equal(probe.model, "deepseek/deepseek-v4.1-flash");
-  assert.deepEqual((probe as unknown as { deepseek?: { thinking?: { type: string } } }).deepseek?.thinking, { type: "enabled" });
+  assert.deepEqual(
+    (probe as unknown as { deepseek?: { thinking?: { type: string } } }).deepseek?.thinking,
+    { type: "enabled" },
+  );
   assert.equal(result.model.id, "deepseek/deepseek-v4.1-flash");
 });
 
@@ -226,7 +270,8 @@ test("names the credential-path failure instead of reporting a bare status", asy
       FACTORY_APPROVAL_SECRET: "approval-secret",
       AI_GATEWAY_API_KEY: "revoked-key",
     },
-    async () => new Response(JSON.stringify({ error: { message: "invalid api key" } }), { status: 401 }),
+    async () =>
+      new Response(JSON.stringify({ error: { message: "invalid api key" } }), { status: 401 }),
   );
   assert.equal(unauthorized.model.ok, false);
   assert.equal(unauthorized.model.status, 401);
@@ -267,7 +312,9 @@ test("accepts the Vercel OIDC token when no explicit gateway key is set", async 
       const headers = new Headers(init?.headers);
       if (headers.has("authorization")) authorizations.push(headers.get("authorization") ?? "");
       if (String(init?.body).includes("model")) {
-        return new Response(JSON.stringify({ choices: [{ message: { content: "OK" } }] }), { status: 200 });
+        return new Response(JSON.stringify({ choices: [{ message: { content: "OK" } }] }), {
+          status: 200,
+        });
       }
       return new Response("{}\n", { status: 200 });
     },
@@ -277,20 +324,38 @@ test("accepts the Vercel OIDC token when no explicit gateway key is set", async 
 });
 
 test("validates an explicitly disposable acceptance target", () => {
-  const valid = validateAcceptanceTarget({ repository: "wazootech/wazoo-console", issueNumber: 84, baseSha: "a".repeat(40), worktree: "/tmp/factory", disposable: true });
+  const valid = validateAcceptanceTarget({
+    repository: "wazootech/wazoo-console",
+    issueNumber: 84,
+    baseSha: "a".repeat(40),
+    worktree: "/tmp/factory",
+    disposable: true,
+  });
   assert.deepEqual(valid, { ok: true, errors: [] });
 
-  const invalid = validateAcceptanceTarget({ repository: "not-a-repository", issueNumber: 0, baseSha: "bad", worktree: "", disposable: false });
+  const invalid = validateAcceptanceTarget({
+    repository: "not-a-repository",
+    issueNumber: 0,
+    baseSha: "bad",
+    worktree: "",
+    disposable: false,
+  });
   assert.equal(invalid.ok, false);
   assert.equal(invalid.errors.length, 5);
 });
 
 test("preflight rejects conflicting factory label configuration", async () => {
-  const result = await runPreflight({
-    FACTORY_APPROVAL_SECRET: "approval-secret",
-    FACTORY_CANDIDATE_LABEL: "same",
-    FACTORY_PROMOTED_LABEL: "same",
-  }, async () => { throw new Error("network should not be called"); }, { checkModel: false });
+  const result = await runPreflight(
+    {
+      FACTORY_APPROVAL_SECRET: "approval-secret",
+      FACTORY_CANDIDATE_LABEL: "same",
+      FACTORY_PROMOTED_LABEL: "same",
+    },
+    async () => {
+      throw new Error("network should not be called");
+    },
+    { checkModel: false },
+  );
   assert.equal(result.factoryLabels.ok, false);
   assert.match(result.factoryLabels.errors.join(" "), /differ|unique/u);
   assert.equal(result.ok, false);

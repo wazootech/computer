@@ -64,7 +64,11 @@ const resolveSessionRepository = createSessionRepositoryResolver({
 
 function withRepository(authFn: AuthFn<Request>): AuthFn<Request> {
   return async (request) =>
-    (await attachSessionRepository((await authFn(request)) ?? null, request, { resolve: resolveSessionRepository })).auth;
+    (
+      await attachSessionRepository((await authFn(request)) ?? null, request, {
+        resolve: resolveSessionRepository,
+      })
+    ).auth;
 }
 
 /**

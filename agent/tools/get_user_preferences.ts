@@ -44,8 +44,7 @@ export default defineTool({
       return { found: true, preferences: doc.content };
     } catch (error) {
       return {
-        error:
-          error instanceof Error ? error.message : "Failed to load preferences",
+        error: error instanceof Error ? error.message : "Failed to load preferences",
         found: false,
         preferences: "",
       };

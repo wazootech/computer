@@ -4,9 +4,13 @@ import { startRunRecord } from "#lib/run-records.js";
 import { repositoryTargetFromAuth } from "#lib/github/repository-target.js";
 
 export default defineTool({
-  description: "Ensure the canonical redacted Computer run history exists for the current verified repository. If runId is omitted, the current Eve session ID is used as the stable retrievable run ID.",
+  description:
+    "Ensure the canonical redacted Computer run history exists for the current verified repository. If runId is omitted, the current Eve session ID is used as the stable retrievable run ID.",
   inputSchema: z.object({
-    runId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$/u).optional(),
+    runId: z
+      .string()
+      .regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$/u)
+      .optional(),
     summary: z.string().min(1).max(4000),
     title: z.string().min(1).max(240),
   }),

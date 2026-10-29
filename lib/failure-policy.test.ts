@@ -1,10 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  describeFailure,
-  failureCommentBody,
-  isDeploymentFault,
-} from "./failure-policy.ts";
+import { describeFailure, failureCommentBody, isDeploymentFault } from "./failure-policy.ts";
 
 /**
  * The payload eve attached on the 2026-09-21 dispatches that took Computer

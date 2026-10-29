@@ -8,14 +8,11 @@ import {
 import {
   COMPUTER_APPROVER_ORG,
   COMPUTER_APPROVER_TEAM,
-  FACTORY_BLOCKED_LABEL,
   FACTORY_CANDIDATE_LABEL,
   FACTORY_COMPLETED_LABEL,
-  FACTORY_DUPLICATE_LABEL,
   FACTORY_FAILED_LABEL,
   FACTORY_BRANCH_PREFIX,
   FACTORY_MANUAL_LABEL,
-  FACTORY_NEEDS_CLARIFICATION_LABEL,
   FACTORY_PROMOTED_LABEL,
   FACTORY_QUEUED_LABEL,
   FACTORY_RUNNING_LABEL,
@@ -23,7 +20,6 @@ import {
 } from "../lib/constants.js";
 import {
   bodyMentionsAny,
-  resolveBotName,
   resolveInvocationNames,
   resolveTeamMention,
 } from "../lib/github/bot-name.js";
@@ -65,25 +61,33 @@ const isIgnoredComment = (comment: GitHubComment, botName: string): boolean => {
   if (author === undefined) {
     return false;
   }
-  return (
-    author.type === "Bot" ||
-    author.login.toLowerCase() === `${botName.toLowerCase()}[bot]`
-  );
+  return author.type === "Bot" || author.login.toLowerCase() === `${botName.toLowerCase()}[bot]`;
 };
 
-const githubSourceAttributes = (ctx: GitHubInboundContext, sourceType: string, anchor?: number) => ({
+const githubSourceAttributes = (
+  ctx: GitHubInboundContext,
+  sourceType: string,
+  anchor?: number,
+) => ({
   githubDeliveryId: ctx.delivery.id,
   intakeDeliveryId: ctx.delivery.id,
   githubEvent: ctx.delivery.event,
   githubConversationKind: ctx.conversation.kind,
-  githubIssueNumber: ctx.conversation.issueNumber ? String(ctx.conversation.issueNumber) : undefined,
-  githubPullRequestNumber: ctx.conversation.pullRequestNumber ? String(ctx.conversation.pullRequestNumber) : undefined,
+  githubIssueNumber: ctx.conversation.issueNumber
+    ? String(ctx.conversation.issueNumber)
+    : undefined,
+  githubPullRequestNumber: ctx.conversation.pullRequestNumber
+    ? String(ctx.conversation.pullRequestNumber)
+    : undefined,
   githubSourceType: sourceType,
   githubAnchor: anchor === undefined ? undefined : String(anchor),
 });
 
 const stampGithubTrusted = (ctx: GitHubInboundContext, sourceType = "direct_mention") => {
-  const auth = stampSource(stampTrusted(defaultGitHubAuth(ctx)), githubSourceAttributes(ctx, sourceType));
+  const auth = stampSource(
+    stampTrusted(defaultGitHubAuth(ctx)),
+    githubSourceAttributes(ctx, sourceType),
+  );
   return {
     ...auth,
     attributes: {
@@ -100,7 +104,10 @@ const stampGithubAutonomous = (
   mode: "intake" | "factory" | "ci-fix",
   sourceType: string,
 ) => {
-  const auth = stampSource(stampAutonomous(defaultGitHubAuth(ctx), anchor, mode), githubSourceAttributes(ctx, sourceType, anchor));
+  const auth = stampSource(
+    stampAutonomous(defaultGitHubAuth(ctx), anchor, mode),
+    githubSourceAttributes(ctx, sourceType, anchor),
+  );
   return {
     ...auth,
     attributes: {
@@ -132,25 +139,20 @@ const TRUSTED_LABELER_ROLES = new Set(["admin", "maintain", "write", "triage"]);
  * unattended pipeline maintainer-triggered. Fails closed: an API error
  * acknowledges the event without dispatching.
  */
-const isAllowedTeamMember = async (
-  ctx: GitHubInboundContext
-): Promise<boolean> => {
+const isAllowedTeamMember = async (ctx: GitHubInboundContext): Promise<boolean> => {
   if (ctx.sender.type === "Bot") return false;
   try {
     const response = await ctx.github.request({
       method: "GET",
       path: `/orgs/${encodeURIComponent(COMPUTER_APPROVER_ORG)}/teams/${encodeURIComponent(COMPUTER_APPROVER_TEAM)}/memberships/${encodeURIComponent(ctx.sender.login)}`,
     });
-    return response.ok &&
-      (response.body as { state?: unknown }).state === "active";
+    return response.ok && (response.body as { state?: unknown }).state === "active";
   } catch {
     return false;
   }
 };
 
-const isTrustedLabeler = async (
-  ctx: GitHubInboundContext
-): Promise<boolean> => {
+const isTrustedLabeler = async (ctx: GitHubInboundContext): Promise<boolean> => {
   try {
     const response = await ctx.github.request<{
       permission?: string;
@@ -176,28 +178,47 @@ const markPromotedIssueRunning = async (
 ): Promise<"success" | "invalid"> => {
   const path = `/repos/${ctx.repository.owner}/${ctx.repository.name}/issues/${issueNumber}`;
   const readLabels = async (): Promise<string[]> => {
-    const response = await ctx.github.request<{ labels?: Array<{ name?: unknown }> }>({ method: "GET", path });
+    const response = await ctx.github.request<{ labels?: Array<{ name?: unknown }> }>({
+      method: "GET",
+      path,
+    });
     if (!response.ok) throw new Error(`GitHub promotion read failed with HTTP ${response.status}`);
-    return (response.body.labels ?? []).flatMap((label) => typeof label.name === "string" ? [label.name] : []);
+    return (response.body.labels ?? []).flatMap((label) =>
+      typeof label.name === "string" ? [label.name] : [],
+    );
   };
 
   const freshLabels = await readLabels();
   if (intakeStateForLabels(freshLabels) === "running") return "success";
   let plan: ReturnType<typeof planIntakeStateTransition>;
   try {
-    plan = planIntakeStateTransition(freshLabels, "running", freshLabels.includes(WAYFINDER_TASK_LABEL));
+    plan = planIntakeStateTransition(
+      freshLabels,
+      "running",
+      freshLabels.includes(WAYFINDER_TASK_LABEL),
+    );
   } catch {
     return "invalid";
   }
 
   try {
-    const addResponse = await ctx.github.request({ method: "POST", path: `${path}/labels`, body: { labels: plan.add } });
-    if (!addResponse.ok) throw new Error(`GitHub promotion add failed with HTTP ${addResponse.status}`);
+    const addResponse = await ctx.github.request({
+      method: "POST",
+      path: `${path}/labels`,
+      body: { labels: plan.add },
+    });
+    if (!addResponse.ok)
+      throw new Error(`GitHub promotion add failed with HTTP ${addResponse.status}`);
     for (const label of plan.remove) {
-      const removeResponse = await ctx.github.request({ method: "DELETE", path: `${path}/labels/${encodeURIComponent(label)}` });
-      if (!removeResponse.ok) throw new Error(`GitHub promotion cleanup failed with HTTP ${removeResponse.status}`);
+      const removeResponse = await ctx.github.request({
+        method: "DELETE",
+        path: `${path}/labels/${encodeURIComponent(label)}`,
+      });
+      if (!removeResponse.ok)
+        throw new Error(`GitHub promotion cleanup failed with HTTP ${removeResponse.status}`);
     }
-    if (intakeStateForLabels(await readLabels()) !== "running") throw new Error("GitHub promotion state could not be confirmed");
+    if (intakeStateForLabels(await readLabels()) !== "running")
+      throw new Error("GitHub promotion state could not be confirmed");
     return "success";
   } catch (error) {
     try {
@@ -397,8 +418,7 @@ export default githubChannel({
       return null;
     }
     const invoked =
-      !isIgnoredComment(comment, botName) &&
-      bodyMentionsAny(comment.body, invocationNames);
+      !isIgnoredComment(comment, botName) && bodyMentionsAny(comment.body, invocationNames);
     if (!invoked || !(await isAllowedTeamMember(ctx))) {
       return null;
     }
@@ -437,7 +457,9 @@ export default githubChannel({
     const issuePayload = raw.issue ?? raw;
     const appliedLabel = raw.label?.name ?? issuePayload.label?.name;
     const labels = new Set(
-      (raw.labels ?? issuePayload.labels ?? []).map((entry) => entry?.name).filter((name): name is string => typeof name === "string"),
+      (raw.labels ?? issuePayload.labels ?? [])
+        .map((entry) => entry?.name)
+        .filter((name): name is string => typeof name === "string"),
     );
     const target = repositoryTargetFromInbound(ctx);
     if (appliedLabel === FACTORY_CANDIDATE_LABEL) {
@@ -455,11 +477,7 @@ export default githubChannel({
     }
 
     const promotionLabel = appliedLabel === FACTORY_PROMOTED_LABEL;
-    if (
-      !promotionLabel ||
-      !labels.has(FACTORY_QUEUED_LABEL) ||
-      !labels.has(WAYFINDER_TASK_LABEL)
-    ) {
+    if (!promotionLabel || !labels.has(FACTORY_QUEUED_LABEL) || !labels.has(WAYFINDER_TASK_LABEL)) {
       return null;
     }
     const duplicate = await claimIntakeDelivery(target, {
@@ -468,13 +486,9 @@ export default githubChannel({
       mode: "promoted",
     });
     if (duplicate.duplicate) return null;
-    try {
-      const promotionResult = await markPromotedIssueRunning(ctx, issue.issueNumber, [...labels]);
-      if (promotionResult === "invalid") {
-        return null;
-      }
-    } catch (error) {
-      throw error;
+    const promotionResult = await markPromotedIssueRunning(ctx, issue.issueNumber, [...labels]);
+    if (promotionResult === "invalid") {
+      return null;
     }
     return {
       auth: stampGithubAutonomous(ctx, issue.issueNumber, "factory", "human_promotion"),

@@ -228,7 +228,10 @@ export function resolveDiscordMentionAdmission(
     principalId: access.principalId,
     prompt,
     sessionChannelId: event.channelId,
-    sessionToken: discordMentionSessionToken({ channelId: event.channelId, guildId: event.guildId }),
+    sessionToken: discordMentionSessionToken({
+      channelId: event.channelId,
+      guildId: event.guildId,
+    }),
     tier: "internal",
   };
 }

@@ -6,7 +6,7 @@ export default defineEval({
   tags: ["fast", "needs-connect"],
   async test(t) {
     await t.send(
-      "Record a durable note in the factory brain: this repo's test suite must be run with `pnpm test --runInBand`, or it flakes. Save it to the brain now."
+      "Record a durable note in the factory brain: this repo's test suite must be run with `pnpm test --runInBand`, or it flakes. Save it to the brain now.",
     );
     t.parked();
     t.requireInputRequest({ toolName: "update_factory_brain" });

@@ -99,8 +99,14 @@ const BOT_TOKEN = readEnv("COMPUTER_DISCORD_BOT_TOKEN", readEnv("DISCORD_BOT_TOK
 const ZO_TOKEN = readEnv("ZO_API_TOKEN", readEnv("ZO_CLIENT_IDENTITY_TOKEN"));
 const PERSONA_ID = readEnv("COMPUTER_PERSONA_ID", "5f58a6ba-da81-4b8e-9105-4c85685a6a93");
 const ZO_API = readEnv("COMPUTER_ZO_API", "https://api.zo.computer").replace(/\/+$/, "");
-const GATEWAY_URL = readEnv("COMPUTER_DISCORD_GATEWAY_URL", "wss://gateway.discord.gg/?v=10&encoding=json");
-const REST = readEnv("COMPUTER_DISCORD_API_BASE", "https://discord.com/api/v10").replace(/\/+$/, "");
+const GATEWAY_URL = readEnv(
+  "COMPUTER_DISCORD_GATEWAY_URL",
+  "wss://gateway.discord.gg/?v=10&encoding=json",
+);
+const REST = readEnv("COMPUTER_DISCORD_API_BASE", "https://discord.com/api/v10").replace(
+  /\/+$/,
+  "",
+);
 const TURN_TIMEOUT_MS = Number(readEnv("COMPUTER_TURN_TIMEOUT_MS", "600000"));
 
 const policyConfig = discordPolicyConfigFromEnv();
@@ -112,7 +118,16 @@ const MAX_BACKOFF_MS = 5 * 60_000;
 const DISALLOWED_INTENTS_DELAY_MS = 5 * 60_000;
 const TYPING_REFRESH_MS = 8_000;
 
-const OP = { dispatch: 0, heartbeat: 1, identify: 2, resume: 6, reconnect: 7, invalidSession: 9, hello: 10, heartbeatAck: 11 } as const;
+const OP = {
+  dispatch: 0,
+  heartbeat: 1,
+  identify: 2,
+  resume: 6,
+  reconnect: 7,
+  invalidSession: 9,
+  hello: 10,
+  heartbeatAck: 11,
+} as const;
 
 interface GatewaySocket {
   onopen: ((event: unknown) => void) | null;
@@ -186,7 +201,11 @@ function chunkReply(text: string, size = MAX_REPLY_CHARS): readonly string[] {
   return parts.slice(0, MAX_REPLY_PARTS);
 }
 
-async function discordRequest(method: "POST" | "GET", path: string, body?: unknown): Promise<unknown> {
+async function discordRequest(
+  method: "POST" | "GET",
+  path: string,
+  body?: unknown,
+): Promise<unknown> {
   const response = await fetch(`${REST}${path}`, {
     method,
     headers: {
@@ -197,7 +216,9 @@ async function discordRequest(method: "POST" | "GET", path: string, body?: unkno
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   if (!response.ok && response.status !== 204) {
-    throw new Error(`discord ${method} ${path} -> ${String(response.status)} ${(await response.text()).slice(0, 200)}`);
+    throw new Error(
+      `discord ${method} ${path} -> ${String(response.status)} ${(await response.text()).slice(0, 200)}`,
+    );
   }
   if (response.status === 204) return null;
   return (await response.json()) as unknown;
@@ -208,7 +229,8 @@ async function discordRequest(method: "POST" | "GET", path: string, body?: unkno
  * names none: changing how Computer thinks is a persona edit in Zo.
  */
 async function askComputer(prompt: string, conversationKey: string): Promise<string> {
-  if (ZO_TOKEN.length === 0) throw new Error("no Zo token: set ZO_API_TOKEN or ZO_CLIENT_IDENTITY_TOKEN");
+  if (ZO_TOKEN.length === 0)
+    throw new Error("no Zo token: set ZO_API_TOKEN or ZO_CLIENT_IDENTITY_TOKEN");
   const existing = readConversation(conversationKey);
   const response = await fetch(`${ZO_API}/zo/ask`, {
     method: "POST",
@@ -226,15 +248,24 @@ async function askComputer(prompt: string, conversationKey: string): Promise<str
   });
   const text = await response.text();
   if (!response.ok) throw new Error(`zo/ask -> ${String(response.status)} ${text.slice(0, 300)}`);
-  const parsed = JSON.parse(text) as { conversation_id?: unknown; error?: unknown; output?: unknown };
-  if (typeof parsed.error === "string" && parsed.error.length > 0) throw new Error(`zo/ask -> ${parsed.error}`);
-  if (typeof parsed.conversation_id === "string") writeConversation(conversationKey, parsed.conversation_id);
+  const parsed = JSON.parse(text) as {
+    conversation_id?: unknown;
+    error?: unknown;
+    output?: unknown;
+  };
+  if (typeof parsed.error === "string" && parsed.error.length > 0)
+    throw new Error(`zo/ask -> ${parsed.error}`);
+  if (typeof parsed.conversation_id === "string")
+    writeConversation(conversationKey, parsed.conversation_id);
   const out = parsed.output;
   if (typeof out === "string") return out;
   return out === undefined ? "" : JSON.stringify(out, null, 2);
 }
 
-function wrapPrompt(prompt: string, meta: { author: string; parentChannelId: string | null }): string {
+function wrapPrompt(
+  prompt: string,
+  meta: { author: string; parentChannelId: string | null },
+): string {
   return [
     "[Discord]",
     `Speaker: ${meta.author}`,
@@ -272,7 +303,10 @@ async function handleMention(raw: unknown): Promise<void> {
   const stopTyping = keepTyping(admission.sessionChannelId);
   try {
     const answer = await askComputer(
-      wrapPrompt(admission.prompt, { author: admission.authorUsername ?? admission.authorId, parentChannelId: admission.parentChannelId }),
+      wrapPrompt(admission.prompt, {
+        author: admission.authorUsername ?? admission.authorId,
+        parentChannelId: admission.parentChannelId,
+      }),
       admission.sessionToken,
     );
     const parts = chunkReply(answer.length === 0 ? "(Computer returned an empty answer.)" : answer);
@@ -292,16 +326,23 @@ async function handleMention(raw: unknown): Promise<void> {
           : {}),
       });
     }
-    log(`answered ${admission.messageId} in ${admission.sessionChannelId} (${String(answer.length)} chars, ${String(parts.length)} part(s))`);
+    log(
+      `answered ${admission.messageId} in ${admission.sessionChannelId} (${String(answer.length)} chars, ${String(parts.length)} part(s))`,
+    );
   } catch (error) {
-    log(`failed to answer ${admission.messageId}: ${error instanceof Error ? error.message : String(error)}`);
+    log(
+      `failed to answer ${admission.messageId}: ${error instanceof Error ? error.message : String(error)}`,
+    );
   } finally {
     stopTyping();
   }
 }
 
 const seenMessages = createDedupeCache({ limit: 1024, ttlMs: 15 * 60 * 1000 });
-const limiter = createRateLimiter({ limit: DISCORD_BRIDGE_USER_LIMIT, windowMs: DISCORD_BRIDGE_USER_WINDOW_MS });
+const limiter = createRateLimiter({
+  limit: DISCORD_BRIDGE_USER_LIMIT,
+  windowMs: DISCORD_BRIDGE_USER_WINDOW_MS,
+});
 
 export function run(): void {
   const discovered = (globalThis as { WebSocket?: SocketConstructor }).WebSocket;
@@ -436,14 +477,19 @@ export function run(): void {
           guilds?: readonly { id: string }[];
         } | null;
         sessionId = payload?.session_id ?? null;
-        if (typeof payload?.resume_gateway_url === "string") gatewayUrl = payload.resume_gateway_url;
+        if (typeof payload?.resume_gateway_url === "string")
+          gatewayUrl = payload.resume_gateway_url;
         BOT_USER_ID = payload?.user?.id ?? BOT_USER_ID;
         attempts = 0;
         const tag = payload?.user?.username ?? "(unknown)";
         const guilds = payload?.guilds?.map((guild) => guild.id) ?? [];
-        log(`ready: computer-discord ${tag}#${BOT_USER_ID} guilds=[${guilds.join(",")}] persona=${PERSONA_ID}`);
+        log(
+          `ready: computer-discord ${tag}#${BOT_USER_ID} guilds=[${guilds.join(",")}] persona=${PERSONA_ID}`,
+        );
         if (guilds.length === 0) {
-          log("READY reports no guilds: invite the Computer application to the server with the bot scope; mentions cannot arrive until it is a member");
+          log(
+            "READY reports no guilds: invite the Computer application to the server with the bot scope; mentions cannot arrive until it is a member",
+          );
         }
         return;
       }
@@ -471,7 +517,9 @@ export function run(): void {
       const code = event.code;
       const reason = event.reason.length > 0 ? ` (${event.reason})` : "";
       if (DISCORD_GATEWAY_FATAL_CLOSE_CODES.includes(code)) {
-        log(`gateway closed with ${String(code)}: ${FATAL_CLOSE_REASONS.get(code) ?? "unrecoverable close code"}`);
+        log(
+          `gateway closed with ${String(code)}: ${FATAL_CLOSE_REASONS.get(code) ?? "unrecoverable close code"}`,
+        );
       }
       if (code === 4014) {
         reconnect(DISALLOWED_INTENTS_DELAY_MS, `4014${reason}`);

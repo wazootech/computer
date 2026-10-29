@@ -1,0 +1,13 @@
+node_modules
+.next
+.eve
+.vercel
+.output
+.nitro
+dist
+pnpm-lock.yaml
+next-env.d.ts
+channels/discord/data
+# Spec-exact shared workflows; keep byte-identical across the org.
+.github/workflows/code-health.yml
+.github/workflows/secret-scan.yml

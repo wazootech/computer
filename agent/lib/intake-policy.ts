@@ -62,7 +62,9 @@ export function intakeStateForLabels(labels: readonly string[]): IntakeState | n
     return present.length === 2 && present.includes(FACTORY_QUEUED_LABEL) ? "promoted" : null;
   }
   if (present.length !== 1) return null;
-  const entry = (Object.entries(stateLabels) as [IntakeState, string][]).find(([, label]) => label === present[0]);
+  const entry = (Object.entries(stateLabels) as [IntakeState, string][]).find(
+    ([, label]) => label === present[0],
+  );
   return entry?.[0] ?? null;
 }
 
@@ -84,7 +86,10 @@ export function isAllowedIntakeLabel(label: string): boolean {
   return isFactoryStateLabel(label) || isAllowedIntakeClassificationLabel(label);
 }
 
-export function stateLabelsForTransition(currentLabels: readonly string[], next: IntakeState): {
+export function stateLabelsForTransition(
+  currentLabels: readonly string[],
+  next: IntakeState,
+): {
   add: string[];
   remove: string[];
 } {

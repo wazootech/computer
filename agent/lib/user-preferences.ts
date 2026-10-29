@@ -19,9 +19,7 @@ import { USER_PREFERENCES_PREFIX } from "./blob.js";
  * the full tool-context type.
  */
 type UserPrincipal =
-  | { readonly principalId: string; readonly principalType: string }
-  | null
-  | undefined;
+  { readonly principalId: string; readonly principalType: string } | null | undefined;
 
 /**
  * Resolve the Blob key holding the current user's preferences.

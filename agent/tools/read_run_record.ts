@@ -4,12 +4,24 @@ import { RUN_ID_PATTERN, readLegacyRunRecord, readRunHistory } from "#lib/run-re
 import { repositoryTargetFromAuth } from "#lib/github/repository-target.js";
 
 export default defineTool({
-  description: "Read a canonical redacted Computer software-factory run history by its stable run ID. The history contains lifecycle events, approvals, stage lineage, outcomes, and no raw credentials or customer content.",
+  description:
+    "Read a canonical redacted Computer software-factory run history by its stable run ID. The history contains lifecycle events, approvals, stage lineage, outcomes, and no raw credentials or customer content.",
   inputSchema: z.object({ runId: z.string().regex(RUN_ID_PATTERN) }),
-  outputSchema: z.object({ found: z.boolean(), path: z.string(), record: z.string(), error: z.string().optional() }),
+  outputSchema: z.object({
+    found: z.boolean(),
+    path: z.string(),
+    record: z.string(),
+    error: z.string().optional(),
+  }),
   async execute({ runId }, ctx) {
     const target = repositoryTargetFromAuth(ctx.session.auth);
-    if (!target) return { error: "No verified GitHub repository is attached to this session.", found: false, path: "", record: "" };
+    if (!target)
+      return {
+        error: "No verified GitHub repository is attached to this session.",
+        found: false,
+        path: "",
+        record: "",
+      };
     try {
       const result = await readRunHistory(target, runId);
       if (result.found) {
@@ -23,7 +35,12 @@ export default defineTool({
         ? { found: true, path: legacy.path, record: legacy.content }
         : { found: false, path: legacy.path, record: "" };
     } catch (error) {
-      return { error: error instanceof Error ? error.message : "Failed to read run history", found: false, path: "", record: "" };
+      return {
+        error: error instanceof Error ? error.message : "Failed to read run history",
+        found: false,
+        path: "",
+        record: "",
+      };
     }
   },
 });

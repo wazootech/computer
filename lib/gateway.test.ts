@@ -39,7 +39,10 @@ test("prefers an explicit gateway key over the Vercel OIDC token", () => {
     value: "oidc-token",
   });
   assert.deepEqual(
-    resolveGatewayCredential({ AI_GATEWAY_API_KEY: "gateway-key", VERCEL_OIDC_TOKEN: "oidc-token" }),
+    resolveGatewayCredential({
+      AI_GATEWAY_API_KEY: "gateway-key",
+      VERCEL_OIDC_TOKEN: "oidc-token",
+    }),
     { kind: "api-key", value: "gateway-key" },
   );
 });

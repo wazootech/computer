@@ -19,12 +19,18 @@ test("body mention matching ignores non-string bodies", () => {
 
 test("team alias matches native organization team mention syntax", () => {
   assert.equal(
-    bodyMentionsAny("Please ask @wazootech/computer to help", ["wazoocomputer", "wazootech/computer"]),
-    true
+    bodyMentionsAny("Please ask @wazootech/computer to help", [
+      "wazoocomputer",
+      "wazootech/computer",
+    ]),
+    true,
   );
   assert.equal(
-    bodyMentionsAny("Please ask @wazootech/computerish to help", ["wazoocomputer", "wazootech/computer"]),
-    false
+    bodyMentionsAny("Please ask @wazootech/computerish to help", [
+      "wazoocomputer",
+      "wazootech/computer",
+    ]),
+    false,
   );
 });
 

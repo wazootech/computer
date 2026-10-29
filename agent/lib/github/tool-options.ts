@@ -1,10 +1,7 @@
 import { buildEveToolDefinition } from "@github-tools/sdk/eve-runtime";
 import { defineTool, type ToolDefinition } from "eve/tools";
 import type { ApprovalContext, ApprovalStatus } from "eve/tools/approval";
-import {
-  repositoryScopedSearchQuery,
-  type RepositoryTarget,
-} from "./repository-target.js";
+import { repositoryScopedSearchQuery, type RepositoryTarget } from "./repository-target.js";
 import { mintInstallationToken } from "./app-token.js";
 import {
   closeIssuePolicy,
@@ -62,7 +59,11 @@ export function bindGithubTool(toolName: string, target: RepositoryTarget): Tool
     githubToolOptionsFor(target) as never,
   ) as ToolDefinition;
   return defineTool({
-    approval: { request: (ctx) => githubApprovalRequest(ctx, intakeIssueNumber(ctx.session.auth.current) ?? undefined), response: teamApprovalResponse },
+    approval: {
+      request: (ctx) =>
+        githubApprovalRequest(ctx, intakeIssueNumber(ctx.session.auth.current) ?? undefined),
+      response: teamApprovalResponse,
+    },
     description: definition.description,
     inputSchema: definition.inputSchema,
     outputSchema: definition.outputSchema,
@@ -79,7 +80,10 @@ export function bindGithubTool(toolName: string, target: RepositoryTarget): Tool
       ) {
         boundInput.query = repositoryScopedSearchQuery(boundInput.query, target);
       }
-      if (isFactoryRun(ctx.session.auth.current) && (toolName === "addLabels" || toolName === "removeLabel")) {
+      if (
+        isFactoryRun(ctx.session.auth.current) &&
+        (toolName === "addLabels" || toolName === "removeLabel")
+      ) {
         const intakeIssue = intakeIssueNumber(ctx.session.auth.current);
         if (intakeIssue !== null) boundInput.issueNumber = intakeIssue;
       }

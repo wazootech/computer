@@ -33,16 +33,26 @@ export type ReviewPolicy = Readonly<{
 }>;
 
 const HIGH_RISK_PATTERNS: readonly [ReviewRiskFactor, RegExp][] = [
-  ["security", /(^|\/)(auth|authentication|authorization|crypto|secret|token|trust|webhook|security)(\/|\.|$)|password|credential|signature|redact/i],
-  ["permissions", /(^|\/)(approval|permission|policy|access|rbac|acl)(\/|\.|$)|allowlist|denylist|privilege/i],
+  [
+    "security",
+    /(^|\/)(auth|authentication|authorization|crypto|secret|token|trust|webhook|security)(\/|\.|$)|password|credential|signature|redact/i,
+  ],
+  [
+    "permissions",
+    /(^|\/)(approval|permission|policy|access|rbac|acl)(\/|\.|$)|allowlist|denylist|privilege/i,
+  ],
   ["migration", /(^|\/)(migrations?|schema|database|db)(\/|\.|$)|backfill|alter table/i],
   ["public_api", /(^|\/)(api|routes?|public|openapi|graphql)(\/|\.|$)|\.d\.ts$|breaking.?change/i],
   ["data", /(^|\/)(blob|storage|persistence|records?|data)(\/|\.|$)|retention|serialization/i],
-  ["deployment", /(^|\/)(\.github|deploy|deployment|infra|terraform|docker)(\/|\.|$)|vercel|workflow/i],
+  [
+    "deployment",
+    /(^|\/)(\.github|deploy|deployment|infra|terraform|docker)(\/|\.|$)|vercel|workflow/i,
+  ],
   ["runtime", /(^|\/)(agent|channels?|hooks?|subagents?|tools?)(\/|\.|$)|package\.json|lockfile/i],
 ];
 
-const DOC_PATTERN = /(^|\/)(docs?|documentation)(\/|$)|(^|\/)(readme|changelog|contributing)(\.[^/]+)?$|\.(md|mdx|mdoc|adoc|rst)$/i;
+const DOC_PATTERN =
+  /(^|\/)(docs?|documentation)(\/|$)|(^|\/)(readme|changelog|contributing)(\.[^/]+)?$|\.(md|mdx|mdoc|adoc|rst)$/i;
 
 const normalize = (value: string | undefined): string => value?.trim().toLowerCase() ?? "";
 
@@ -73,8 +83,12 @@ export function classifyReviewDepth(input: ReviewPolicyInput): ReviewPolicy {
     ...(paths.length > 0 && paths.every(isDocumentationPath) ? ["documentation" as const] : []),
     ...pathFactors,
     ...(workType === "security" ? ["security" as const] : []),
-    ...(affectedArea.includes("security") || affectedArea.includes("auth") ? ["security" as const] : []),
-    ...(affectedArea.includes("permission") || affectedArea.includes("access") ? ["permissions" as const] : []),
+    ...(affectedArea.includes("security") || affectedArea.includes("auth")
+      ? ["security" as const]
+      : []),
+    ...(affectedArea.includes("permission") || affectedArea.includes("access")
+      ? ["permissions" as const]
+      : []),
     ...(paths.length === 0 && !workType && !affectedArea ? ["unknown" as const] : []),
   ]);
   const highRisk = factors.some((factor) => factor !== "documentation") || priority === "critical";

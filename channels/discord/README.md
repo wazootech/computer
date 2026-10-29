@@ -27,18 +27,18 @@ From the repository root that is `pnpm discord:channel`.
 
 Environment:
 
-| Name | Meaning |
-| --- | --- |
-| `COMPUTER_DISCORD_BOT_TOKEN` | Bot token for the Gateway connection and reply posts. Falls back to `DISCORD_BOT_TOKEN`. |
-| `COMPUTER_PERSONA_ID` | The Computer Zo persona. Defaults to the deployed persona id. |
-| `ZO_API_TOKEN` | Zo credential for `/zo/ask`. Falls back to `ZO_CLIENT_IDENTITY_TOKEN`. |
-| `DISCORD_INTERNAL_GUILD_IDS` | Allowlisted guild(s), comma-separated. |
-| `DISCORD_INTERNAL_CHANNEL_IDS` | Allowlisted channel(s), comma-separated. |
-| `DISCORD_INTERNAL_USER_IDS` | Allowlisted user id(s), comma-separated. |
-| `DISCORD_INTERNAL_ROLE_IDS` | Allowlisted role id(s), comma-separated. |
-| `DISCORD_INTERNAL_GUILD_WIDE` | `1` or `true` admits an allowlisted user or role in any channel of an allowlisted guild. |
-| `COMPUTER_ZO_API` | Override the Zo base URL. Defaults to `https://api.zo.computer`. |
-| `COMPUTER_TURN_TIMEOUT_MS` | Per-turn deadline. Defaults to 600000. |
+| Name                           | Meaning                                                                                  |
+| ------------------------------ | ---------------------------------------------------------------------------------------- |
+| `COMPUTER_DISCORD_BOT_TOKEN`   | Bot token for the Gateway connection and reply posts. Falls back to `DISCORD_BOT_TOKEN`. |
+| `COMPUTER_PERSONA_ID`          | The Computer Zo persona. Defaults to the deployed persona id.                            |
+| `ZO_API_TOKEN`                 | Zo credential for `/zo/ask`. Falls back to `ZO_CLIENT_IDENTITY_TOKEN`.                   |
+| `DISCORD_INTERNAL_GUILD_IDS`   | Allowlisted guild(s), comma-separated.                                                   |
+| `DISCORD_INTERNAL_CHANNEL_IDS` | Allowlisted channel(s), comma-separated.                                                 |
+| `DISCORD_INTERNAL_USER_IDS`    | Allowlisted user id(s), comma-separated.                                                 |
+| `DISCORD_INTERNAL_ROLE_IDS`    | Allowlisted role id(s), comma-separated.                                                 |
+| `DISCORD_INTERNAL_GUILD_WIDE`  | `1` or `true` admits an allowlisted user or role in any channel of an allowlisted guild. |
+| `COMPUTER_ZO_API`              | Override the Zo base URL. Defaults to `https://api.zo.computer`.                         |
+| `COMPUTER_TURN_TIMEOUT_MS`     | Per-turn deadline. Defaults to 600000.                                                   |
 
 A managed service inherits neither the host shell nor any deployment's
 environment, so `COMPUTER_DISCORD_BOT_TOKEN` and `ZO_CLIENT_IDENTITY_TOKEN` are

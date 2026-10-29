@@ -34,9 +34,7 @@ export interface DiscordPolicyConfig {
   readonly internalGuildWide?: boolean;
 }
 
-export type DiscordAccess =
-  | { readonly tier: DiscordTier; readonly principalId: string }
-  | null;
+export type DiscordAccess = { readonly tier: DiscordTier; readonly principalId: string } | null;
 
 /** Parse a comma-separated id list from the environment. Empty and unset are []. */
 export function parseIdList(raw: string | undefined): string[] {
@@ -53,7 +51,9 @@ export function parseFlag(raw: string | undefined): boolean {
   return value === "1" || value === "true";
 }
 
-export function discordPolicyConfigFromEnv(env: NodeJS.ProcessEnv = process.env): DiscordPolicyConfig {
+export function discordPolicyConfigFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+): DiscordPolicyConfig {
   const config = {
     publicGuildIds: parseIdList(env.DISCORD_PUBLIC_GUILD_IDS),
     publicChannelIds: parseIdList(env.DISCORD_PUBLIC_CHANNEL_IDS),
@@ -114,7 +114,9 @@ export function resolveDiscordAccess(
   }
 
   const userAllowed = config.internalUserIds.includes(request.userId);
-  const roleAllowed = request.memberRoleIds.some((roleId) => config.internalRoleIds.includes(roleId));
+  const roleAllowed = request.memberRoleIds.some((roleId) =>
+    config.internalRoleIds.includes(roleId),
+  );
   if (
     config.internalGuildWide &&
     isGuildAllowlisted(request.guildId, config.internalGuildIds) &&

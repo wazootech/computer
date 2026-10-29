@@ -41,10 +41,7 @@ export default defineTool({
     } catch (error) {
       return {
         deleted: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to clear preferences",
+        error: error instanceof Error ? error.message : "Failed to clear preferences",
         success: false,
       };
     }

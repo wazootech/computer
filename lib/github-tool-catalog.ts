@@ -49,7 +49,9 @@ export function resolveGithubSdkDeclarationsDir(): string {
   const entry = import.meta.resolve("@github-tools/sdk/eve");
   const declarationsDir = posix.dirname(entry.replace(/^file:\/\//u, ""));
   if (!existsSync(declarationsDir)) {
-    throw new Error(`no GitHub SDK declarations at ${declarationsDir}; the tool descriptions cannot be resolved`);
+    throw new Error(
+      `no GitHub SDK declarations at ${declarationsDir}; the tool descriptions cannot be resolved`,
+    );
   }
   return declarationsDir;
 }
@@ -131,7 +133,11 @@ export function githubToolSurface(options: GithubToolCatalogOptions): GithubTool
         name,
         boundName: `${GITHUB_TOOL_BINDING_PREFIX}${name}`,
         description,
-        sourcePath: posix.join(options.agentDirLabel, "tools", `${GITHUB_TOOL_BINDING_PREFIX}${name}.ts`),
+        sourcePath: posix.join(
+          options.agentDirLabel,
+          "tools",
+          `${GITHUB_TOOL_BINDING_PREFIX}${name}.ts`,
+        ),
         write: writes.has(name),
       } satisfies GithubToolSurfaceEntry;
     });

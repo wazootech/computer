@@ -86,3 +86,13 @@ Discord channel does not deploy that way: `.github/workflows/deploy.yml` restart
 the host service over Zo's MCP endpoint, and `scripts/zo-deploy.ts` is the client
 it runs. The channel's source still needs `pnpm run typecheck` and `pnpm test` to
 pass, the same as the app.
+
+## Code health
+
+Family-wide rules live in the [wazootech workspace constitution](https://github.com/wazootech/workspace/blob/main/AGENTS.md#code-health-standards); this repo's specifics:
+
+- `verify` runs `pnpm install --frozen-lockfile`, `format:check`, `lint`, `typecheck`, `test`, and the eve build; `.node-version` pins Node, and devDependencies are pinned to exact versions.
+- Prettier uses width 100. `.gitattributes` forces LF.
+- Before pushing, run `pnpm exec prettier --check .`, `pnpm exec eslint . --max-warnings 0`, `pnpm run typecheck`, and `pnpm test`.
+- Merging to `main` can trigger `deploy.yml`, which restarts the `computer-discord` bot when `channels/**`, `lib/**` (Discord modules), `scripts/zo-deploy.ts`, or `package.json` change.
+- `no-explicit-any` is an ESLint error. `secret-scan.yml` runs gitleaks, third-party actions are pinned to commit SHAs, and `code-health.yml` only warns (file length, TODOs without an issue link). `.github/CODEOWNERS` routes review.

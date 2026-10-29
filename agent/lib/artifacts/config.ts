@@ -1,5 +1,4 @@
 import { ARTIFACTS_PREFIX } from "../blob.js";
-import { createHash } from "node:crypto";
 import type { RepositoryTarget } from "../github/repository-target.js";
 import { repositoryScopeKey } from "../github/repository-target.js";
 
@@ -82,11 +81,8 @@ const SUFFIX_LENGTH = 6;
  * @returns A lowercase hyphenated slug, capped so ids stay readable.
  */
 const slugify = (title: string): string =>
-  title
-    .toLowerCase()
-    .replace(SLUG_DISALLOWED, "-")
-    .slice(0, 48)
-    .replace(SLUG_TRIM, "") || "untitled";
+  title.toLowerCase().replace(SLUG_DISALLOWED, "-").slice(0, 48).replace(SLUG_TRIM, "") ||
+  "untitled";
 
 /**
  * Build an id for a newly saved artifact.

@@ -8,7 +8,6 @@ import {
   MAX_ARTIFACT_LENGTH,
   MAX_ARTIFACT_TITLE_LENGTH,
 } from "./config.js";
-import type { RepositoryTarget } from "../github/repository-target.js";
 import { repositoryTargetFromAuth } from "../github/repository-target.js";
 
 /**
@@ -54,7 +53,11 @@ export const saveArtifactTool = () =>
      */
     async execute({ kind, title, markdown }, ctx) {
       const target = repositoryTargetFromAuth(ctx.session.auth);
-      if (!target) return { error: "No verified GitHub repository is attached to this session.", saved: false };
+      if (!target)
+        return {
+          error: "No verified GitHub repository is attached to this session.",
+          saved: false,
+        };
       const id = artifactId(kind, title);
       const key = artifactKey(target, id);
       if (!key) {
@@ -65,8 +68,7 @@ export const saveArtifactTool = () =>
         return { id, kind, saved: true, title };
       } catch (error) {
         return {
-          error:
-            error instanceof Error ? error.message : "Failed to save artifact",
+          error: error instanceof Error ? error.message : "Failed to save artifact",
           saved: false,
         };
       }
@@ -75,21 +77,21 @@ export const saveArtifactTool = () =>
       kind: z
         .enum(ARTIFACT_KINDS)
         .describe(
-          "What this document is. Travels with the id so the reader knows what it's holding."
+          "What this document is. Travels with the id so the reader knows what it's holding.",
         ),
       markdown: z
         .string()
         .min(1)
         .max(MAX_ARTIFACT_LENGTH)
         .describe(
-          "The full document as Markdown. Write it for the station that will act on it: findings and their evidence, not a narrative."
+          "The full document as Markdown. Write it for the station that will act on it: findings and their evidence, not a narrative.",
         ),
       title: z
         .string()
         .min(1)
         .max(MAX_ARTIFACT_TITLE_LENGTH)
         .describe(
-          "Human-readable title, e.g. 'Dedupe reset emails analysis'. The id is derived from it."
+          "Human-readable title, e.g. 'Dedupe reset emails analysis'. The id is derived from it.",
         ),
     }),
     outputSchema: z.object({
@@ -98,7 +100,7 @@ export const saveArtifactTool = () =>
         .string()
         .optional()
         .describe(
-          "Report this in your structured output; it is how anyone else reads the document."
+          "Report this in your structured output; it is how anyone else reads the document.",
         ),
       kind: z.string().optional(),
       saved: z.boolean(),
@@ -152,24 +154,16 @@ export const readArtifactTool = () =>
       }
     },
     inputSchema: z.object({
-      id: z
-        .string()
-        .min(1)
-        .max(200)
-        .describe("The artifact id, exactly as it was handed to you."),
+      id: z.string().min(1).max(200).describe("The artifact id, exactly as it was handed to you."),
     }),
     outputSchema: z.object({
       createdAt: z
         .string()
         .optional()
-        .describe(
-          "When it was saved. Treat an old artifact as possibly stale."
-        ),
+        .describe("When it was saved. Treat an old artifact as possibly stale."),
       found: z
         .boolean()
-        .describe(
-          "False when no artifact exists for that id; report that rather than guessing."
-        ),
+        .describe("False when no artifact exists for that id; report that rather than guessing."),
       id: z.string().optional(),
       markdown: z.string().optional(),
     }),

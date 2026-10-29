@@ -33,13 +33,13 @@ export function repositoryAttributes(target: RepositoryTarget): Record<string, s
 
 export function stampRepositoryTarget(
   auth: SessionAuthContext,
-  target: RepositoryTarget
+  target: RepositoryTarget,
 ): SessionAuthContext {
   return { ...auth, attributes: { ...auth.attributes, ...repositoryAttributes(target) } };
 }
 
 export function repositoryTargetFromAuth(auth: AuthLike): RepositoryTarget | null {
-  const context = auth && "current" in auth ? auth.current ?? auth.initiator : auth;
+  const context = auth && "current" in auth ? (auth.current ?? auth.initiator) : auth;
   const attributes = context?.attributes;
   const owner = attributes?.githubRepositoryOwner;
   const name = attributes?.githubRepositoryName;
@@ -59,11 +59,11 @@ export function repositoryTargetFromAuth(auth: AuthLike): RepositoryTarget | nul
   return { fullName, id, name, owner };
 }
 
-export function repositoryScopedSearchQuery(
-  query: string,
-  target: RepositoryTarget
-): string {
-  const unscopedQuery = query.replace(/\brepo:\S+/gi, "").replace(/\s+/g, " ").trim();
+export function repositoryScopedSearchQuery(query: string, target: RepositoryTarget): string {
+  const unscopedQuery = query
+    .replace(/\brepo:\S+/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
   return [`repo:${target.fullName}`, unscopedQuery].filter(Boolean).join(" ");
 }
 

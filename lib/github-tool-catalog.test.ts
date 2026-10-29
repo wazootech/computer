@@ -27,7 +27,8 @@ const WRITE_TOOL_NAMES = Object.keys(GITHUB_WRITE_TOOLS);
 function withDeclarations(files: Record<string, string>, run: (dir: string) => void): void {
   const dir = mkdtempSync(join(tmpdir(), "github-catalog-"));
   try {
-    for (const [name, content] of Object.entries(files)) writeFileSync(join(dir, name), content, "utf8");
+    for (const [name, content] of Object.entries(files))
+      writeFileSync(join(dir, name), content, "utf8");
     run(dir);
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -36,7 +37,10 @@ function withDeclarations(files: Record<string, string>, run: (dir: string) => v
 
 test("every bound github tool resolves to a description", () => {
   const bound = readBoundGithubToolNames(TOOLS_DIR);
-  assert.ok(bound.length > 20, `expected the authored bindings to cover the GitHub surface, found ${bound.length}`);
+  assert.ok(
+    bound.length > 20,
+    `expected the authored bindings to cover the GitHub surface, found ${bound.length}`,
+  );
 
   const surface = githubToolSurface({
     toolsDir: TOOLS_DIR,
@@ -105,7 +109,11 @@ test("the SDK's approval sentence is dropped, not exported as a tool description
 test("a bound tool with no resolvable description fails loudly", () => {
   const toolsDir = mkdtempSync(join(tmpdir(), "github-bindings-"));
   try {
-    writeFileSync(join(toolsDir, "github__resolveGithubToken.ts"), "export default null;\n", "utf8");
+    writeFileSync(
+      join(toolsDir, "github__resolveGithubToken.ts"),
+      "export default null;\n",
+      "utf8",
+    );
     withDeclarations({ "chunk.d.mts": "declare const other: unknown;\n" }, (dir) => {
       assert.throws(
         () =>
@@ -141,7 +149,10 @@ test("a restricted surface carries only the declared tools, and none of them wri
 });
 
 test("the projected write flag is exactly the set this repository gates behind approval", () => {
-  const policy = readFileSync(join(process.cwd(), "agent", "lib", "github", "tool-options.ts"), "utf8");
+  const policy = readFileSync(
+    join(process.cwd(), "agent", "lib", "github", "tool-options.ts"),
+    "utf8",
+  );
   const gated = new Set([...policy.matchAll(/case "(\w+)":/gu)].map((match) => match[1]));
   assert.ok(gated.size > 0, "the approval switch should name the tools it gates");
 

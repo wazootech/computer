@@ -8,9 +8,11 @@ export type RunHistorySource = {
 };
 
 export function sourceFromAuth(auth: unknown, channel: unknown): RunHistorySource {
-  const context = auth && typeof auth === "object" && "current" in auth
-    ? ((auth as { current?: unknown; initiator?: unknown }).current ?? (auth as { initiator?: unknown }).initiator)
-    : auth;
+  const context =
+    auth && typeof auth === "object" && "current" in auth
+      ? ((auth as { current?: unknown; initiator?: unknown }).current ??
+        (auth as { initiator?: unknown }).initiator)
+      : auth;
   const attributes = (context as { attributes?: Record<string, string> } | null)?.attributes ?? {};
   const numberFrom = (key: string) => {
     const value = Number(attributes[key]);

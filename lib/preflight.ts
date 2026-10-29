@@ -34,10 +34,14 @@ export type AcceptanceTarget = {
   disposable: boolean;
 };
 
-export function validateAcceptanceTarget(target: AcceptanceTarget): { ok: boolean; errors: string[] } {
+export function validateAcceptanceTarget(target: AcceptanceTarget): {
+  ok: boolean;
+  errors: string[];
+} {
   const errors: string[] = [];
   if (!/^[^/\s]+\/[^/\s]+$/u.test(target.repository)) errors.push("repository must be owner/name");
-  if (!Number.isSafeInteger(target.issueNumber) || target.issueNumber <= 0) errors.push("issueNumber must be positive");
+  if (!Number.isSafeInteger(target.issueNumber) || target.issueNumber <= 0)
+    errors.push("issueNumber must be positive");
   if (!/^[0-9a-f]{40}$/iu.test(target.baseSha)) errors.push("baseSha must be a full commit SHA");
   if (!target.worktree.trim()) errors.push("worktree is required");
   if (!target.disposable) errors.push("target must be explicitly disposable");
@@ -228,7 +232,12 @@ async function checkGatewayModel(
     }
     const body = (await response.json()) as { choices?: unknown[] };
     if (!Array.isArray(body.choices) || body.choices.length === 0) {
-      return { ok: false, id: model, status: response.status, error: "gateway response omitted choices" };
+      return {
+        ok: false,
+        id: model,
+        status: response.status,
+        error: "gateway response omitted choices",
+      };
     }
     return { ok: true, id: model, status: response.status };
   } catch {
@@ -284,9 +293,7 @@ export async function runPreflight(
   };
 
   const githubMissing = missingSecrets(
-    Object.fromEntries(
-      Object.entries(secrets).filter(([name]) => name.startsWith("GITHUB_")),
-    ),
+    Object.fromEntries(Object.entries(secrets).filter(([name]) => name.startsWith("GITHUB_"))),
   );
   if (githubMissing.length > 0) {
     githubApp.error = `missing ${githubMissing.join(", ")}`;

@@ -19,11 +19,16 @@ import {
  */
 export async function teamApprovalResponse({
   responder,
-}: ApprovalResponseContext): Promise<{ status: "allowed" } | { status: "rejected"; reason: string }> {
+}: ApprovalResponseContext): Promise<
+  { status: "allowed" } | { status: "rejected"; reason: string }
+> {
   const login = sessionGithubLogin(responder);
   if (login === null) return { status: "rejected", reason: MISSING_APPROVER_LOGIN_REASON };
   try {
-    return evaluateApproverAccess({ login, roster: await approverTeamRoster({ mintToken: mintInstallationToken }) });
+    return evaluateApproverAccess({
+      login,
+      roster: await approverTeamRoster({ mintToken: mintInstallationToken }),
+    });
   } catch {
     return { status: "rejected", reason: APPROVER_ROSTER_UNAVAILABLE_REASON };
   }

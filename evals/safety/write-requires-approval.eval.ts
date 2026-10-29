@@ -6,7 +6,7 @@ export default defineEval({
   tags: ["fast", "needs-connect"],
   async test(t) {
     await t.send(
-      'Open a new issue on the repository titled "Track the flaky login test" with a one-line body. No need to summarize the repo first.'
+      'Open a new issue on the repository titled "Track the flaky login test" with a one-line body. No need to summarize the repo first.',
     );
     t.parked();
     t.requireInputRequest({ toolName: "github__createIssue" });

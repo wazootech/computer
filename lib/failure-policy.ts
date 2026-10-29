@@ -44,7 +44,8 @@ const TERMINAL_UPSTREAM_TYPES = new Set([
 const DEPLOYMENT_STATUS_CODES = new Set([401, 402, 403]);
 
 /** Matches the rejection name when a cascade carries it only in `message`. */
-const PROVIDER_REJECTION_PATTERN = /\b(?:AI Gateway model request rejected|Model provider API error)\b/u;
+const PROVIDER_REJECTION_PATTERN =
+  /\b(?:AI Gateway model request rejected|Model provider API error)\b/u;
 
 const readString = (value: unknown): string | undefined =>
   typeof value === "string" && value.trim().length > 0 ? value : undefined;

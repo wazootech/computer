@@ -24,8 +24,7 @@ export default defineAgent({
     additionalProperties: false,
     properties: {
       actionable: {
-        description:
-          "Whether the request contains enough information to act on.",
+        description: "Whether the request contains enough information to act on.",
         type: "boolean",
       },
       affected_area: {

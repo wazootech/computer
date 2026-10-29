@@ -5,7 +5,8 @@ import { classifyReviewDepth } from "../../lib/review-policy.ts";
 const optionalText = z.string().max(300).optional();
 
 export default defineTool({
-  description: "Select the minimum review depth for a work item from its classification and affected surfaces. Documentation-only work may be light; high-impact contract, security, permission, migration, data, deployment, runtime, or critical work is deep and requires explicit human escalation.",
+  description:
+    "Select the minimum review depth for a work item from its classification and affected surfaces. Documentation-only work may be light; high-impact contract, security, permission, migration, data, deployment, runtime, or critical work is deep and requires explicit human escalation.",
   inputSchema: z.object({
     affectedArea: optionalText,
     affectedSurface: z.array(z.string().max(500)).max(200).default([]),
@@ -46,7 +47,14 @@ export default defineTool({
         type: "boolean",
       },
     },
-    required: ["depth", "rationale", "riskFactors", "requiredChecks", "evidenceRequirements", "humanEscalation"],
+    required: [
+      "depth",
+      "rationale",
+      "riskFactors",
+      "requiredChecks",
+      "evidenceRequirements",
+      "humanEscalation",
+    ],
     additionalProperties: false,
   },
   execute(input) {

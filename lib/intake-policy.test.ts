@@ -15,7 +15,10 @@ import {
 test("candidate intake can queue only a concrete Wayfinder task", () => {
   assert.equal(canTransitionIntakeState([FACTORY_CANDIDATE_LABEL], "queued", true), true);
   assert.equal(canTransitionIntakeState([FACTORY_CANDIDATE_LABEL], "queued", false), false);
-  assert.equal(canTransitionIntakeState([FACTORY_CANDIDATE_LABEL], "needs_clarification", false), true);
+  assert.equal(
+    canTransitionIntakeState([FACTORY_CANDIDATE_LABEL], "needs_clarification", false),
+    true,
+  );
 });
 
 test("intake state transitions are monotonic and do not reopen running work", () => {

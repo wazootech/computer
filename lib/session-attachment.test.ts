@@ -19,12 +19,22 @@ import { repositoryTargetFromAuth } from "../agent/lib/github/repository-target.
 const target = { fullName: "wazootech/computer", id: 42, name: "computer", owner: "wazootech" };
 
 function userAuth(attributes: Record<string, string> = {}): SessionAuthContext {
-  return { attributes, authenticator: "better-auth:vercel", principalId: "user-1", principalType: "user" };
+  return {
+    attributes,
+    authenticator: "better-auth:vercel",
+    principalId: "user-1",
+    principalType: "user",
+  };
 }
 
 function repositoryResponse(): Response {
   return new Response(
-    JSON.stringify({ id: target.id, name: target.name, full_name: target.fullName, owner: { login: target.owner } }),
+    JSON.stringify({
+      id: target.id,
+      name: target.name,
+      full_name: target.fullName,
+      owner: { login: target.owner },
+    }),
     { status: 200 },
   );
 }
@@ -42,8 +52,14 @@ test("parses only plain owner/name repository names", () => {
 
 test("defaults to the federation manifest repo and honors the deployment override", () => {
   assert.equal(defaultSessionRepository({}), DEFAULT_SESSION_REPOSITORY);
-  assert.equal(defaultSessionRepository({ COMPUTER_SESSION_REPOSITORY: "wazootech/computer" }), "wazootech/computer");
-  assert.equal(defaultSessionRepository({ COMPUTER_SESSION_REPOSITORY: "not-a-repo" }), DEFAULT_SESSION_REPOSITORY);
+  assert.equal(
+    defaultSessionRepository({ COMPUTER_SESSION_REPOSITORY: "wazootech/computer" }),
+    "wazootech/computer",
+  );
+  assert.equal(
+    defaultSessionRepository({ COMPUTER_SESSION_REPOSITORY: "not-a-repo" }),
+    DEFAULT_SESSION_REPOSITORY,
+  );
 });
 
 test("a request header names the repository and a malformed header fails closed", () => {
@@ -51,19 +67,28 @@ test("a request header names the repository and a malformed header fails closed"
     headers: { [SESSION_REPOSITORY_HEADER]: "wazootech/computer" },
     method: "POST",
   });
-  assert.deepEqual(requestedSessionRepository(withHeader, {}), { ok: true, fullName: "wazootech/computer" });
+  assert.deepEqual(requestedSessionRepository(withHeader, {}), {
+    ok: true,
+    fullName: "wazootech/computer",
+  });
 
   const malformed = new Request("https://example.com/eve/v1/session", {
     headers: { [SESSION_REPOSITORY_HEADER]: "wazootech workspace" },
     method: "POST",
   });
-  assert.deepEqual(requestedSessionRepository(malformed, {}), { ok: false, failure: "invalid-format" });
+  assert.deepEqual(requestedSessionRepository(malformed, {}), {
+    ok: false,
+    failure: "invalid-format",
+  });
 
   const bare = new Request("https://example.com/eve/v1/session", { method: "POST" });
-  assert.deepEqual(requestedSessionRepository(bare, { COMPUTER_SESSION_REPOSITORY: "wazootech/wiki" }), {
-    ok: true,
-    fullName: "wazootech/wiki",
-  });
+  assert.deepEqual(
+    requestedSessionRepository(bare, { COMPUTER_SESSION_REPOSITORY: "wazootech/wiki" }),
+    {
+      ok: true,
+      fullName: "wazootech/wiki",
+    },
+  );
 });
 
 test("resolves a repository through the installation token and reports coverage failures", async () => {
@@ -72,7 +97,10 @@ test("resolves a repository through the installation token and reports coverage 
     fullName: "wazootech/computer",
     token: "installation-token",
     fetchImpl: async (input, init) => {
-      calls.push({ url: String(input), authorization: String(new Headers(init?.headers).get("authorization")) });
+      calls.push({
+        url: String(input),
+        authorization: String(new Headers(init?.headers).get("authorization")),
+      });
       return repositoryResponse();
     },
   });
@@ -135,7 +163,10 @@ test("records a legible failure instead of attaching an unreachable repository",
   assert.equal(outcome.attached, false);
   assert.equal(outcome.failure, "not-covered");
   assert.equal(repositoryTargetFromAuth(outcome.auth), null);
-  assert.deepEqual(sessionRepositoryFailure(outcome.auth), { failure: "not-covered", fullName: "wazootech/secret" });
+  assert.deepEqual(sessionRepositoryFailure(outcome.auth), {
+    failure: "not-covered",
+    fullName: "wazootech/secret",
+  });
   const notice = sessionRepositoryNotice(outcome.auth, {});
   assert.ok(notice);
   assert.match(notice, /wazootech\/secret/);
@@ -166,7 +197,12 @@ test("a malformed repository name is reported without calling GitHub", async () 
 test("app and runtime principals keep the auth they already had", async () => {
   const request = new Request("https://example.com/eve/v1/session", { method: "POST" });
   let calls = 0;
-  const appAuth = { attributes: {}, authenticator: "app", principalId: "eve:app", principalType: "runtime" };
+  const appAuth = {
+    attributes: {},
+    authenticator: "app",
+    principalId: "eve:app",
+    principalType: "runtime",
+  };
   const outcome = await attachSessionRepository(appAuth, request, {
     resolve: async () => {
       calls += 1;
