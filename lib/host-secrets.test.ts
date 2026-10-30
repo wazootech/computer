@@ -9,7 +9,7 @@ import {
 const SECRETS = [
   "# Zo secrets",
   "DISCORD_BOT_TOKEN=bot-token",
-  'export ZO_CLIENT_IDENTITY_TOKEN="zo-token"',
+  'export COMPUTER_DISCORD_ZO_API_KEY="zo-token"',
   "export DISCORD_INTERNAL_GUILD_IDS='1525763491712737310'",
   "",
   "DISCORD_INTERNAL_CHANNEL_IDS=1525763492431331362,",
@@ -26,7 +26,7 @@ test("parses key=value lines, skipping comments and malformed entries", () => {
 
 test("strips quotes and an export prefix", () => {
   const values = parseHostSecrets(SECRETS);
-  assert.equal(values.get("ZO_CLIENT_IDENTITY_TOKEN"), "zo-token");
+  assert.equal(values.get("COMPUTER_DISCORD_ZO_API_KEY"), "zo-token");
   assert.equal(values.get("DISCORD_INTERNAL_GUILD_IDS"), "1525763491712737310");
 });
 
@@ -38,7 +38,7 @@ test("fills an unset variable from the host file", () => {
   assert.equal(source.path, "/secrets");
   assert.deepEqual(source.loaded, [
     "DISCORD_BOT_TOKEN",
-    "ZO_CLIENT_IDENTITY_TOKEN",
+    "COMPUTER_DISCORD_ZO_API_KEY",
     "DISCORD_INTERNAL_GUILD_IDS",
     "DISCORD_INTERNAL_CHANNEL_IDS",
   ]);
@@ -49,7 +49,7 @@ test("never overwrites a variable the service already set", () => {
   const source = loadHostSecrets(env, ["/secrets"], () => true, () => SECRETS);
   assert.equal(env.DISCORD_BOT_TOKEN, "from-service");
   assert.ok(!source.loaded.includes("DISCORD_BOT_TOKEN"));
-  assert.ok(source.loaded.includes("ZO_CLIENT_IDENTITY_TOKEN"));
+  assert.ok(source.loaded.includes("COMPUTER_DISCORD_ZO_API_KEY"));
 });
 
 test("treats an empty variable as unset", () => {
@@ -83,5 +83,5 @@ test("leaves unrelated names alone", () => {
   loadHostSecrets(env, ["/secrets"], () => true, () => SECRETS);
   assert.equal(env.NOT_A_BRIDGE_NAME, undefined);
   assert.ok(CHANNEL_SECRET_NAMES.includes("DISCORD_BOT_TOKEN"));
-  assert.ok(CHANNEL_SECRET_NAMES.includes("ZO_CLIENT_IDENTITY_TOKEN"));
+  assert.ok(CHANNEL_SECRET_NAMES.includes("COMPUTER_DISCORD_ZO_API_KEY"));
 });
